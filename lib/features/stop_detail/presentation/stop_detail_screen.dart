@@ -185,17 +185,6 @@ class StopDetailScreen extends ConsumerWidget {
           ),
         ),
       ),
-      // FAB: navigate to route view when a service is selected
-      floatingActionButton: selectedService != null
-          ? FloatingActionButton.small(
-              heroTag: 'viewRoute',
-              tooltip: 'View full route',
-              onPressed: () {
-                context.push('/route/$selectedService?highlight=$busStopCode');
-              },
-              child: const Icon(Icons.route),
-            )
-          : null,
     );
   }
 }
@@ -204,7 +193,7 @@ class StopDetailScreen extends ConsumerWidget {
 // Body: Map + Arrivals List (Draggable Sheet)
 // =============================================================================
 
-class _StopDetailBody extends StatelessWidget {
+class _StopDetailBody extends StatefulWidget {
   final String busStopCode;
   final StopArrivalsData data;
   final String? selectedService;
@@ -222,17 +211,31 @@ class _StopDetailBody extends StatelessWidget {
   });
 
   @override
+  State<_StopDetailBody> createState() => _StopDetailBodyState();
+}
+
+class _StopDetailBodyState extends State<_StopDetailBody> {
+  final DraggableScrollableController _sheetController =
+      DraggableScrollableController();
+
+  @override
+  void dispose() {
+    _sheetController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Show either the selected service buses, or ALL buses for this stop if none selected
-    final locations = selectedService != null
-        ? data.busLocations
-              .where((loc) => loc.serviceNo == selectedService)
+    final locations = widget.selectedService != null
+        ? widget.data.busLocations
+              .where((loc) => loc.serviceNo == widget.selectedService)
               .toList()
-        : data.busLocations;
+        : widget.data.busLocations;
 
     // Build plate -> ETA lookup from arrival data
     final plateEtaMap = <String, int>{};
-    for (final bus in data.buses) {
+    for (final bus in widget.data.buses) {
       if (bus.plateNo.isNotEmpty && bus.nextArrivalMinutes != null) {
         plateEtaMap[bus.plateNo] = bus.nextArrivalMinutes!;
       }
@@ -241,8 +244,9 @@ class _StopDetailBody extends StatelessWidget {
       }
     }
 
-    final stopLocation = (stopLatitude != null && stopLongitude != null)
-        ? LatLng(stopLatitude!, stopLongitude!)
+    final stopLocation =
+        (widget.stopLatitude != null && widget.stopLongitude != null)
+        ? LatLng(widget.stopLatitude!, widget.stopLongitude!)
         : null;
 
     return Stack(
@@ -256,10 +260,41 @@ class _StopDetailBody extends StatelessWidget {
 
         // Draggable arrivals sheet
         _ArrivalsSheet(
-          busStopCode: busStopCode,
-          data: data,
-          selectedService: selectedService,
-          onServiceTap: onServiceTap,
+          controller: _sheetController,
+          busStopCode: widget.busStopCode,
+          data: widget.data,
+          selectedService: widget.selectedService,
+          onServiceTap: widget.onServiceTap,
+        ),
+
+        // FAB - moved inside Stack for perfect positioning and reactive visibility
+        ListenableBuilder(
+          listenable: _sheetController,
+          builder: (context, _) {
+            final double currentSize = _sheetController.isAttached
+                ? _sheetController.size
+                : 1.0;
+
+            // Hide FAB when at the bottom (minimized) OR when no service is selected
+            final bool visible =
+                widget.selectedService != null && currentSize > 0.2;
+
+            return AnimatedPositioned(
+              duration: const Duration(milliseconds: 200),
+              right: 16,
+              bottom: visible ? 16 : -80, // Slide off screen when hidden
+              child: FloatingActionButton.small(
+                heroTag: null, // Fix: Nested Hero crash
+                tooltip: 'View full route',
+                onPressed: () {
+                  context.push(
+                    '/route/${widget.selectedService}?highlight=${widget.busStopCode}',
+                  );
+                },
+                child: const Icon(Icons.route),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -271,12 +306,14 @@ class _StopDetailBody extends StatelessWidget {
 // =============================================================================
 
 class _ArrivalsSheet extends StatefulWidget {
+  final DraggableScrollableController controller;
   final String busStopCode;
   final StopArrivalsData data;
   final String? selectedService;
   final ValueChanged<String> onServiceTap;
 
   const _ArrivalsSheet({
+    required this.controller,
     required this.busStopCode,
     required this.data,
     required this.selectedService,
@@ -288,20 +325,17 @@ class _ArrivalsSheet extends StatefulWidget {
 }
 
 class _ArrivalsSheetState extends State<_ArrivalsSheet> {
-  final DraggableScrollableController _controller =
-      DraggableScrollableController();
   bool _isUnselecting = false;
 
   @override
   void initState() {
     super.initState();
-    _controller.addListener(_onScroll);
+    widget.controller.addListener(_onScroll);
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_onScroll);
-    _controller.dispose();
+    widget.controller.removeListener(_onScroll);
     super.dispose();
   }
 
@@ -311,8 +345,8 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
     // If dragged to the very top (1.0), and we have a selection, unselect it.
     // This allows dragging up to "dismiss" the map and selection.
     if (widget.selectedService != null &&
-        _controller.isAttached &&
-        _controller.size >= 0.98) {
+        widget.controller.isAttached &&
+        widget.controller.size >= 0.98) {
       _isUnselecting = true;
       // Use microtask to avoid calling build during build
       Future.microtask(() {
@@ -327,8 +361,8 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
     super.didUpdateWidget(oldWidget);
     // If a service was selected (likely via tap), snap to the small state
     if (widget.selectedService != null && oldWidget.selectedService == null) {
-      if (_controller.isAttached) {
-        _controller.animateTo(
+      if (widget.controller.isAttached) {
+        widget.controller.animateTo(
           0.18,
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeOutCubic,
@@ -342,17 +376,17 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return ListenableBuilder(
-      listenable: _controller,
+      listenable: widget.controller,
       builder: (context, child) {
         // Dynamic styling based on scroll position
-        final double currentSize = _controller.isAttached
-            ? _controller.size
+        final double currentSize = widget.controller.isAttached
+            ? widget.controller.size
             : 1.0;
         final bool isFullscreen = currentSize >= 0.95;
         final double cornerRadius = isFullscreen ? 0 : 20;
 
         return DraggableScrollableSheet(
-          controller: _controller,
+          controller: widget.controller,
           initialChildSize: 1.0,
           minChildSize: 0.18,
           maxChildSize: 1.0,
@@ -401,8 +435,7 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
                       selectedService: widget.selectedService,
                       onServiceTap: widget.onServiceTap,
                       scrollController: scrollController,
-                      isMinimized:
-                          currentSize <= 0.2, // Check if sheet is at bottom
+                      isMinimized: currentSize <= 0.2,
                     ),
                   ),
                 ],
@@ -478,12 +511,10 @@ class _ArrivalsList extends ConsumerWidget {
         if (charA != charB) return charA.compareTo(charB);
 
         // 3. Number part
-        // Extract numeric part (handle potential suffix like 'A')
         final numA = int.tryParse(sA.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
         final numB = int.tryParse(sB.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
         if (numA != numB) return numA.compareTo(numB);
 
-        // Fallback to alphabetical for suffix
         return sA.compareTo(sB);
       });
 
