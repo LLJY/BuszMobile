@@ -7,6 +7,8 @@
 /// Polls GetStopArrivals every 15s with include_bus_locations=true.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -326,6 +328,7 @@ class _ArrivalsSheet extends StatefulWidget {
 
 class _ArrivalsSheetState extends State<_ArrivalsSheet> {
   bool _isUnselecting = false;
+  bool _isLockedAtMid = true;
 
   @override
   void initState() {
@@ -340,18 +343,22 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
   }
 
   void _onScroll() {
-    if (_isUnselecting) return;
+    if (_isUnselecting || !widget.controller.isAttached) return;
 
-    // If dragged to the very top (1.0), and we have a selection, unselect it.
-    // This allows dragging up to "dismiss" the map and selection.
-    if (widget.selectedService != null &&
-        widget.controller.isAttached &&
-        widget.controller.size >= 0.98) {
+    final size = widget.controller.size;
+
+    // Reset lock when sheet goes below midpoint
+    if (size < 0.45 && !_isLockedAtMid) {
+      setState(() => _isLockedAtMid = true);
+    }
+
+    // Unselect logic: If dragged to the very top (1.0), dismiss map/selection.
+    if (widget.selectedService != null && size >= 0.98) {
       _isUnselecting = true;
-      // Use microtask to avoid calling build during build
       Future.microtask(() {
         widget.onServiceTap(widget.selectedService!);
         _isUnselecting = false;
+        setState(() => _isLockedAtMid = true);
       });
     }
   }
@@ -359,11 +366,12 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
   @override
   void didUpdateWidget(_ArrivalsSheet oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // If a service was selected (likely via tap), snap to the small state
+    // Requirement: "when you select a bus... snap to 50%"
     if (widget.selectedService != null && oldWidget.selectedService == null) {
       if (widget.controller.isAttached) {
+        setState(() => _isLockedAtMid = true);
         widget.controller.animateTo(
-          0.18,
+          0.5,
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeOutCubic,
         );
@@ -378,67 +386,105 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
     return ListenableBuilder(
       listenable: widget.controller,
       builder: (context, child) {
-        // Dynamic styling based on scroll position
         final double currentSize = widget.controller.isAttached
             ? widget.controller.size
             : 1.0;
         final bool isFullscreen = currentSize >= 0.95;
         final double cornerRadius = isFullscreen ? 0 : 20;
 
+        // Requirement: "at 50% expansion... allow for scrolling of the main list without moving the bottomsheet"
+        // Implementation: We set maxChildSize to 0.5 when locked.
+        // This makes the list scroll internally at that point.
+        final double maxChildSize = _isLockedAtMid ? 0.5 : 1.0;
+
+        // Ensure initial/min sizes are valid relative to max
+        const double minChildSize = 0.18;
+        final double initialChildSize = (widget.selectedService == null)
+            ? 1.0
+            : currentSize.clamp(minChildSize, maxChildSize);
+
         return DraggableScrollableSheet(
           controller: widget.controller,
-          initialChildSize: 1.0,
-          minChildSize: 0.18,
-          maxChildSize: 1.0,
+          initialChildSize: initialChildSize,
+          minChildSize: minChildSize,
+          maxChildSize: maxChildSize,
           snap: true,
-          snapSizes: const [0.18, 0.5, 1.0],
+          snapSizes: const [0.18, 0.5], // We only snap to stops we can reach
           builder: (context, scrollController) {
-            return Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(cornerRadius),
+            return NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                // Requirement: "if you FLICK all the way up, then this will be skipped"
+                // Implementation: Catch high velocity scroll at the boundary.
+                if (notification is ScrollEndNotification &&
+                    _isLockedAtMid &&
+                    currentSize >= 0.49 &&
+                    notification.dragDetails != null &&
+                    notification.dragDetails!.primaryVelocity! < -1000) {
+                  setState(() => _isLockedAtMid = false);
+                  widget.controller.animateTo(
+                    1.0,
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.easeOutCubic,
+                  );
+                }
+                return false;
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(cornerRadius),
+                  ),
+                  boxShadow: isFullscreen
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
                 ),
-                boxShadow: isFullscreen
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 10,
-                          offset: const Offset(0, -2),
-                        ),
-                      ],
-              ),
-              child: Column(
-                children: [
-                  // Drag handle - fade out when fullscreen
-                  Opacity(
-                    opacity: isFullscreen ? 0 : 1,
-                    child: Center(
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 12),
-                        width: 36,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: colorScheme.outlineVariant,
-                          borderRadius: BorderRadius.circular(2),
+                child: Column(
+                  children: [
+                    // Drag handle - Wrap in GestureDetector to "unlock" sheet
+                    // Requirement: "you must use the grabber" to move the sheet at 50%
+                    GestureDetector(
+                      onVerticalDragStart: (_) {
+                        if (_isLockedAtMid) {
+                          setState(() => _isLockedAtMid = false);
+                        }
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Opacity(
+                        opacity: isFullscreen ? 0 : 1,
+                        child: Center(
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 12),
+                            width: 36,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: colorScheme.outlineVariant,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
-                  // Arrivals List
-                  Expanded(
-                    child: _ArrivalsList(
-                      busStopCode: widget.busStopCode,
-                      data: widget.data,
-                      selectedService: widget.selectedService,
-                      onServiceTap: widget.onServiceTap,
-                      scrollController: scrollController,
-                      isMinimized: currentSize <= 0.2,
+                    // Arrivals List
+                    Expanded(
+                      child: _ArrivalsList(
+                        busStopCode: widget.busStopCode,
+                        data: widget.data,
+                        selectedService: widget.selectedService,
+                        onServiceTap: widget.onServiceTap,
+                        scrollController: scrollController,
+                        isMinimized: currentSize <= 0.2,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             );
           },
