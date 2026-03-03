@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/error/error_boundary.dart';
 import '../../../data/models/models.dart';
 import '../providers/search_providers.dart';
 
@@ -89,34 +90,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        size: 48,
-                        color: Colors.red,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Search failed',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        error.toString(),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              error: (error, _) => ErrorBoundary(
+                error: error,
+                onRetry: () {
+                  _controller.clear();
+                  ref.read(searchQueryProvider.notifier).update('');
+                  _focusNode.requestFocus();
+                },
               ),
             ),
           ),

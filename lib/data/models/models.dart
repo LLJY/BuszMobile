@@ -60,14 +60,17 @@ class StopArrivalsData {
 // =============================================================================
 
 /// A single bus service arrival at a stop.
+///
+/// Contains an ordered [arrivals] list for N upcoming buses.
+/// Convenience getters [nextArrival] and [laterArrival] provide
+/// backward compatibility with the original two-arrival model.
 class BusArrivalInfo {
   final String serviceNo;
   final int direction;
   final String color;
   final bool isFree;
   final String destination;
-  final ArrivalTime? nextArrival;
-  final ArrivalTime? laterArrival;
+  final List<ArrivalTime> arrivals;
   final String plateNo;
   final String laterPlateNo;
   final bool isDeparting;
@@ -81,8 +84,7 @@ class BusArrivalInfo {
     required this.color,
     required this.isFree,
     required this.destination,
-    this.nextArrival,
-    this.laterArrival,
+    this.arrivals = const [],
     required this.plateNo,
     required this.laterPlateNo,
     required this.isDeparting,
@@ -91,18 +93,22 @@ class BusArrivalInfo {
     required this.delayMinutes,
   });
 
+  /// First upcoming arrival (convenience getter, backward compatible).
+  ArrivalTime? get nextArrival => arrivals.isNotEmpty ? arrivals[0] : null;
+
+  /// Second upcoming arrival (convenience getter, backward compatible).
+  ArrivalTime? get laterArrival => arrivals.length > 1 ? arrivals[1] : null;
+
   /// Minutes until next arrival from now.
   int? get nextArrivalMinutes {
     if (nextArrival == null) return null;
-    final diff = nextArrival!.time.difference(DateTime.now());
-    return diff.inMinutes;
+    return nextArrival!.time.difference(DateTime.now()).inMinutes;
   }
 
   /// Minutes until later arrival from now.
   int? get laterArrivalMinutes {
     if (laterArrival == null) return null;
-    final diff = laterArrival!.time.difference(DateTime.now());
-    return diff.inMinutes;
+    return laterArrival!.time.difference(DateTime.now()).inMinutes;
   }
 
   @override

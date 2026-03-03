@@ -10,6 +10,7 @@ import 'package:connectrpc/protobuf.dart';
 import 'package:connectrpc/protocol/grpc_web.dart' as protocol;
 import 'package:flutter/foundation.dart';
 
+import '../../core/error/app_exception.dart';
 import '../../core/services/auth_service.dart';
 import '../../gen/common/types.pb.dart' as common_pb;
 import '../../gen/frontline/frontline_service.pb.dart' as pb;
@@ -95,11 +96,18 @@ class FrontlineService {
     } catch (e) {
       if (_isAuthError(e)) {
         debugPrint('[Frontline] Auth error on search, refreshing...');
-        await _authService.forceRefresh();
-        final retryHeaders = await _getAuthHeaders();
-        response = await client.searchBusStops(request, headers: retryHeaders);
+        try {
+          await _authService.forceRefresh();
+          final retryHeaders = await _getAuthHeaders();
+          response = await client.searchBusStops(
+            request,
+            headers: retryHeaders,
+          );
+        } catch (retryError) {
+          throw AppException.from(retryError);
+        }
       } else {
-        rethrow;
+        throw AppException.from(e);
       }
     }
 
@@ -140,11 +148,18 @@ class FrontlineService {
     } catch (e) {
       if (_isAuthError(e)) {
         debugPrint('[Frontline] Auth error on getStopArrivals, refreshing...');
-        await _authService.forceRefresh();
-        final retryHeaders = await _getAuthHeaders();
-        response = await client.getStopArrivals(request, headers: retryHeaders);
+        try {
+          await _authService.forceRefresh();
+          final retryHeaders = await _getAuthHeaders();
+          response = await client.getStopArrivals(
+            request,
+            headers: retryHeaders,
+          );
+        } catch (retryError) {
+          throw AppException.from(retryError);
+        }
       } else {
-        rethrow;
+        throw AppException.from(e);
       }
     }
 
@@ -169,19 +184,24 @@ class FrontlineService {
   }
 
   /// Maps protobuf BusArrival to domain model.
+  ///
+  /// Builds an ordered [arrivals] list from proto fields, filtering nulls.
+  /// When the proto expands to N arrivals, only this mapper changes.
   BusArrivalInfo _mapBusArrival(pb.BusArrival proto) {
+    final nextArr = proto.hasNextArrival()
+        ? _mapArrivalTime(proto.nextArrival)
+        : null;
+    final laterArr = proto.hasLaterArrival()
+        ? _mapArrivalTime(proto.laterArrival)
+        : null;
+
     return BusArrivalInfo(
       serviceNo: proto.serviceNo.split('~')[0],
       direction: proto.direction,
       color: proto.color.isEmpty ? '#666666' : proto.color,
       isFree: proto.isFree,
       destination: proto.destination,
-      nextArrival: proto.hasNextArrival()
-          ? _mapArrivalTime(proto.nextArrival)
-          : null,
-      laterArrival: proto.hasLaterArrival()
-          ? _mapArrivalTime(proto.laterArrival)
-          : null,
+      arrivals: [?nextArr, ?laterArr],
       plateNo: proto.plateNo,
       laterPlateNo: proto.laterPlateNo,
       isDeparting: proto.isDeparting,
@@ -219,15 +239,11 @@ class FrontlineService {
     );
   }
 
-  /// Check if an error is a Connect-RPC unauthenticated error.
+  /// Check if an error is an authentication/authorization error.
+  ///
+  /// Uses the same classification as [AppException.from] for consistency.
   bool _isAuthError(Object error) {
-    if (error is ConnectException) {
-      return error.code == Code.unauthenticated ||
-          error.code == Code.permissionDenied;
-    }
-    // Fallback for non-typed errors
-    final msg = error.toString().toLowerCase();
-    return msg.contains('unauthenticated') || msg.contains('401');
+    return AppException.from(error) is AuthException;
   }
 
   /// Converts protobuf Timestamp to local DateTime.
