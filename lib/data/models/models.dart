@@ -175,6 +175,104 @@ class NearbyStop {
 }
 
 // =============================================================================
+// Service Route Data
+// =============================================================================
+
+/// Full route details for a bus service, including polyline and stop sequence.
+///
+/// Mapped from [GetServiceDetailsResponse] by [FrontlineService].
+class ServiceRouteData {
+  /// The bus service number (e.g. "J10").
+  final String serviceNo;
+
+  /// Hex colour string for the service (e.g. "#FF6600").
+  final String color;
+
+  /// Name of the origin stop.
+  final String origin;
+
+  /// Name of the destination stop.
+  final String destination;
+
+  /// Google-encoded polyline string for the route shape.
+  final String encodedPolyline;
+
+  /// Ordered list of stops along this route direction.
+  final List<StopOnRoute> stops;
+
+  const ServiceRouteData({
+    required this.serviceNo,
+    required this.color,
+    required this.origin,
+    required this.destination,
+    required this.encodedPolyline,
+    required this.stops,
+  });
+
+  @override
+  String toString() =>
+      'ServiceRouteData($serviceNo, $origin → $destination, '
+      '${stops.length} stops)';
+}
+
+// =============================================================================
+// Stop On Route
+// =============================================================================
+
+/// A single stop along a bus route, with sequence ordering.
+class StopOnRoute {
+  final String busStopCode;
+  final String busStopName;
+  final double latitude;
+  final double longitude;
+  final int sequenceNo;
+
+  const StopOnRoute({
+    required this.busStopCode,
+    required this.busStopName,
+    required this.latitude,
+    required this.longitude,
+    required this.sequenceNo,
+  });
+
+  @override
+  String toString() =>
+      'StopOnRoute($busStopCode: $busStopName, seq=$sequenceNo)';
+}
+
+// =============================================================================
+// Service Summary
+// =============================================================================
+
+/// Summary of a bus service available at a stop.
+///
+/// Returned by [FrontlineService.getServicesAtStop], providing a complete
+/// directory of all services regardless of current arrivals.
+class ServiceSummary {
+  /// The bus service number (e.g., "10", "77A").
+  final String serviceNo;
+
+  /// Hex color code for the service (e.g., "#FF5722").
+  final String color;
+
+  /// The destination name for this service at this stop.
+  final String destination;
+
+  /// Whether this is a free (no-fare) service.
+  final bool isFree;
+
+  const ServiceSummary({
+    required this.serviceNo,
+    required this.color,
+    required this.destination,
+    required this.isFree,
+  });
+
+  @override
+  String toString() => 'ServiceSummary($serviceNo -> $destination)';
+}
+
+// =============================================================================
 // Bus Location Info
 // =============================================================================
 

@@ -43,12 +43,30 @@ class MockFrontlineService implements FrontlineService {
   }
 
   @override
+  Stream<StopArrivalsData> streamStopArrivals(
+    String busStopCode, {
+    bool includeBusLocations = true,
+  }) {
+    throw UnimplementedError('Not used in search tests');
+  }
+
+  @override
   Future<List<NearbyStop>> findNearbyStops(
     double lat,
     double lng, {
     double radiusMeters = 500,
     int limit = 10,
   }) async {
+    throw UnimplementedError('Not used in search tests');
+  }
+
+  @override
+  Future<ServiceRouteData> getServiceDetails(String serviceNo) async {
+    throw UnimplementedError('Not used in search tests');
+  }
+
+  @override
+  Future<List<ServiceSummary>> getServicesAtStop(String busStopCode) async {
     throw UnimplementedError('Not used in search tests');
   }
 

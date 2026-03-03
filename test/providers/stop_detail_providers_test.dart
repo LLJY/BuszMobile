@@ -21,6 +21,7 @@ import 'package:busz_mobile/features/stop_detail/providers/stop_detail_providers
 class MockFrontlineService implements FrontlineService {
   StopArrivalsData? arrivalsData;
   int arrivalsCallCount = 0;
+  int streamCallCount = 0;
 
   @override
   Future<List<BusStopSearchResult>> searchBusStops(
@@ -40,12 +41,31 @@ class MockFrontlineService implements FrontlineService {
   }
 
   @override
+  Stream<StopArrivalsData> streamStopArrivals(
+    String busStopCode, {
+    bool includeBusLocations = true,
+  }) async* {
+    streamCallCount++;
+    yield arrivalsData!;
+  }
+
+  @override
   Future<List<NearbyStop>> findNearbyStops(
     double lat,
     double lng, {
     double radiusMeters = 500,
     int limit = 10,
   }) async {
+    throw UnimplementedError('Not used in stop detail tests');
+  }
+
+  @override
+  Future<ServiceRouteData> getServiceDetails(String serviceNo) async {
+    throw UnimplementedError('Not used in stop detail tests');
+  }
+
+  @override
+  Future<List<ServiceSummary>> getServicesAtStop(String busStopCode) async {
     throw UnimplementedError('Not used in stop detail tests');
   }
 
@@ -224,9 +244,9 @@ void main() {
       expect(result.value!.busLocations, hasLength(3));
       expect(result.value!.buses, hasLength(1));
       expect(
-        mockService.arrivalsCallCount,
+        mockService.streamCallCount,
         greaterThanOrEqualTo(1),
-        reason: 'Service should have been called at least once',
+        reason: 'Stream should have been called at least once',
       );
     });
   });

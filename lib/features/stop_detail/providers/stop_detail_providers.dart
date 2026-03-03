@@ -1,7 +1,8 @@
 /// Providers for the stop detail feature.
 ///
-/// Uses polling (every 15s) with GetStopArrivals + include_bus_locations.
-/// All providers are autoDispose to stop polling when the screen is left.
+/// Uses StreamStopArrivals for real-time push updates, with 15s polling
+/// fallback if the stream fails. All providers are autoDispose to stop
+/// the stream or polling when the screen is left.
 library;
 
 import 'dart:async';
@@ -15,22 +16,30 @@ import '../../search/providers/search_providers.dart';
 part 'stop_detail_providers.g.dart';
 
 // =============================================================================
-// Stop Arrivals Provider (polling every 15s)
+// Stop Arrivals Provider (streaming with polling fallback)
 // =============================================================================
 
-/// Polls stop arrivals with bus locations every 15 seconds.
+/// Streams stop arrivals with bus locations via server-streaming RPC.
 ///
-/// Auto-disposes when the stop detail screen is left, stopping the polling
-/// loop and freeing network/battery resources.
+/// Falls back to 15-second polling if the stream fails to connect.
+/// Auto-disposes when the stop detail screen is left, stopping the stream
+/// or polling loop and freeing network/battery resources.
 @riverpod
-Stream<StopArrivalsData> stopArrivals(Ref ref, String busStopCode) {
+Stream<StopArrivalsData> stopArrivals(Ref ref, String busStopCode) async* {
   final service = ref.watch(frontlineServiceProvider);
 
-  return _pollingStream(
-    interval: const Duration(seconds: 15),
-    fetch: () =>
-        service.getStopArrivals(busStopCode, includeBusLocations: true),
-  );
+  try {
+    // Primary: server-streaming RPC for real-time push updates
+    yield* service.streamStopArrivals(busStopCode, includeBusLocations: true);
+  } catch (e) {
+    debugPrint('[StopArrivals] Stream failed, falling back to polling: $e');
+    // Fallback: poll every 15 seconds using the unary RPC
+    yield* _pollingStream(
+      interval: const Duration(seconds: 15),
+      fetch: () =>
+          service.getStopArrivals(busStopCode, includeBusLocations: true),
+    );
+  }
 }
 
 /// The currently selected service number filter on the stop detail screen.

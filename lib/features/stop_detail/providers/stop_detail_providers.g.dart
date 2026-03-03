@@ -8,18 +8,20 @@ part of 'stop_detail_providers.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Polls stop arrivals with bus locations every 15 seconds.
+/// Streams stop arrivals with bus locations via server-streaming RPC.
 ///
-/// Auto-disposes when the stop detail screen is left, stopping the polling
-/// loop and freeing network/battery resources.
+/// Falls back to 15-second polling if the stream fails to connect.
+/// Auto-disposes when the stop detail screen is left, stopping the stream
+/// or polling loop and freeing network/battery resources.
 
 @ProviderFor(stopArrivals)
 final stopArrivalsProvider = StopArrivalsFamily._();
 
-/// Polls stop arrivals with bus locations every 15 seconds.
+/// Streams stop arrivals with bus locations via server-streaming RPC.
 ///
-/// Auto-disposes when the stop detail screen is left, stopping the polling
-/// loop and freeing network/battery resources.
+/// Falls back to 15-second polling if the stream fails to connect.
+/// Auto-disposes when the stop detail screen is left, stopping the stream
+/// or polling loop and freeing network/battery resources.
 
 final class StopArrivalsProvider
     extends
@@ -29,10 +31,11 @@ final class StopArrivalsProvider
           Stream<StopArrivalsData>
         >
     with $FutureModifier<StopArrivalsData>, $StreamProvider<StopArrivalsData> {
-  /// Polls stop arrivals with bus locations every 15 seconds.
+  /// Streams stop arrivals with bus locations via server-streaming RPC.
   ///
-  /// Auto-disposes when the stop detail screen is left, stopping the polling
-  /// loop and freeing network/battery resources.
+  /// Falls back to 15-second polling if the stream fails to connect.
+  /// Auto-disposes when the stop detail screen is left, stopping the stream
+  /// or polling loop and freeing network/battery resources.
   StopArrivalsProvider._({
     required StopArrivalsFamily super.from,
     required String super.argument,
@@ -77,12 +80,13 @@ final class StopArrivalsProvider
   }
 }
 
-String _$stopArrivalsHash() => r'3b30927a4afff8fac3ae28a5df5c32ac32f2ec0e';
+String _$stopArrivalsHash() => r'e76ac76e7e41049d07652396a0d66db002ad6173';
 
-/// Polls stop arrivals with bus locations every 15 seconds.
+/// Streams stop arrivals with bus locations via server-streaming RPC.
 ///
-/// Auto-disposes when the stop detail screen is left, stopping the polling
-/// loop and freeing network/battery resources.
+/// Falls back to 15-second polling if the stream fails to connect.
+/// Auto-disposes when the stop detail screen is left, stopping the stream
+/// or polling loop and freeing network/battery resources.
 
 final class StopArrivalsFamily extends $Family
     with $FunctionalFamilyOverride<Stream<StopArrivalsData>, String> {
@@ -95,10 +99,11 @@ final class StopArrivalsFamily extends $Family
         isAutoDispose: true,
       );
 
-  /// Polls stop arrivals with bus locations every 15 seconds.
+  /// Streams stop arrivals with bus locations via server-streaming RPC.
   ///
-  /// Auto-disposes when the stop detail screen is left, stopping the polling
-  /// loop and freeing network/battery resources.
+  /// Falls back to 15-second polling if the stream fails to connect.
+  /// Auto-disposes when the stop detail screen is left, stopping the stream
+  /// or polling loop and freeing network/battery resources.
 
   StopArrivalsProvider call(String busStopCode) =>
       StopArrivalsProvider._(argument: busStopCode, from: this);

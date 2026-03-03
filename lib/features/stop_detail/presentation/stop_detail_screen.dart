@@ -9,6 +9,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/error/error_boundary.dart';
@@ -18,6 +19,7 @@ import '../../../data/models/models.dart';
 import '../providers/stop_detail_providers.dart';
 import '../widgets/arrival_tile.dart';
 import '../widgets/bus_map.dart';
+import '../widgets/service_chips_bar.dart';
 
 // =============================================================================
 // Stop Detail Screen
@@ -115,25 +117,56 @@ class StopDetailScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: arrivalsAsync.when(
-        data: (data) => _StopDetailBody(
-          data: data,
-          selectedService: selectedService,
-          stopLatitude: stopLatitude,
-          stopLongitude: stopLongitude,
-          onServiceTap: (serviceNo) {
-            final current = ref.read(selectedServiceProvider);
-            ref
-                .read(selectedServiceProvider.notifier)
-                .select(current == serviceNo ? null : serviceNo);
-          },
-        ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => ErrorBoundary(
-          error: error,
-          onRetry: () => ref.invalidate(stopArrivalsProvider(busStopCode)),
-        ),
+      body: Column(
+        children: [
+          // Service chips bar — loads independently via GetServicesAtStop RPC
+          ServiceChipsBar(
+            busStopCode: busStopCode,
+            selectedService: selectedService,
+            onServiceTap: (serviceNo) {
+              final current = ref.read(selectedServiceProvider);
+              ref
+                  .read(selectedServiceProvider.notifier)
+                  .select(current == serviceNo ? null : serviceNo);
+            },
+          ),
+
+          // Arrivals content (map + list)
+          Expanded(
+            child: arrivalsAsync.when(
+              data: (data) => _StopDetailBody(
+                data: data,
+                selectedService: selectedService,
+                stopLatitude: stopLatitude,
+                stopLongitude: stopLongitude,
+                onServiceTap: (serviceNo) {
+                  final current = ref.read(selectedServiceProvider);
+                  ref
+                      .read(selectedServiceProvider.notifier)
+                      .select(current == serviceNo ? null : serviceNo);
+                },
+              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, stack) => ErrorBoundary(
+                error: error,
+                onRetry: () =>
+                    ref.invalidate(stopArrivalsProvider(busStopCode)),
+              ),
+            ),
+          ),
+        ],
       ),
+      // FAB: navigate to route view when a service is selected
+      floatingActionButton: selectedService != null
+          ? FloatingActionButton.small(
+              heroTag: 'viewRoute',
+              tooltip: 'View full route',
+              onPressed: () {
+                context.push('/route/$selectedService?highlight=$busStopCode');
+              },
+              child: const Icon(Icons.route),
+            )
+          : null,
     );
   }
 }
