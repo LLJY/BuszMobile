@@ -17,6 +17,7 @@ import '../../gen/frontline/frontline_service.pb.dart' as pb;
 import '../../gen/frontline/frontline_service.connect.client.dart';
 import '../../gen/google/protobuf/timestamp.pb.dart' as ts_pb;
 import '../models/models.dart';
+import 'frontline_service_base.dart';
 
 // =============================================================================
 // Frontline Service
@@ -28,7 +29,7 @@ import '../models/models.dart';
 /// - [searchBusStops] for the search screen
 /// - [getStopArrivals] for the stop detail screen (with bus locations)
 /// - [streamStopArrivals] for real-time push updates via server-streaming
-class FrontlineService {
+class FrontlineService implements FrontlineServiceBase {
   Transport? _transport;
   final AuthService _authService = AuthService();
 
@@ -68,6 +69,7 @@ class FrontlineService {
   }
 
   /// Closes the transport.
+  @override
   void dispose() {
     _transport = null;
     _authService.dispose();
@@ -81,6 +83,7 @@ class FrontlineService {
   ///
   /// [query] - Search query (stop name or code)
   /// [limit] - Maximum number of results (default: 20)
+  @override
   Future<List<BusStopSearchResult>> searchBusStops(
     String query, {
     int limit = 20,
@@ -133,6 +136,7 @@ class FrontlineService {
   ///
   /// [busStopCode] - The unique code identifying the bus stop
   /// [includeBusLocations] - Whether to include live GPS positions
+  @override
   Future<StopArrivalsData> getStopArrivals(
     String busStopCode, {
     bool includeBusLocations = true,
@@ -179,6 +183,7 @@ class FrontlineService {
   ///
   /// [busStopCode] - The unique code identifying the bus stop
   /// [includeBusLocations] - Whether to include live GPS positions
+  @override
   Stream<StopArrivalsData> streamStopArrivals(
     String busStopCode, {
     bool includeBusLocations = true,
@@ -225,6 +230,7 @@ class FrontlineService {
   /// [lat] / [lng] - The user's current GPS position
   /// [radiusMeters] - Search radius in metres (default: 500)
   /// [limit] - Maximum number of results (default: 10)
+  @override
   Future<List<NearbyStop>> findNearbyStops(
     double lat,
     double lng, {
@@ -271,6 +277,7 @@ class FrontlineService {
   ///
   /// [serviceNo] - The bus service number (e.g. "J10")
   /// Returns route polyline, stop sequence, origin/destination.
+  @override
   Future<ServiceRouteData> getServiceDetails(String serviceNo) async {
     final client = _getClient();
     final request = pb.GetServiceDetailsRequest()..serviceNo = serviceNo;
@@ -310,6 +317,7 @@ class FrontlineService {
   ///
   /// Returns a complete service directory regardless of current arrivals.
   /// [busStopCode] - The unique code identifying the bus stop
+  @override
   Future<List<ServiceSummary>> getServicesAtStop(String busStopCode) async {
     final client = _getClient();
     final request = pb.GetServicesAtStopRequest()..busStopCode = busStopCode;

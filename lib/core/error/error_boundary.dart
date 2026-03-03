@@ -29,6 +29,8 @@ class ErrorBoundary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     final message = error is AppException
         ? (error as AppException).userMessage
         : error.toString();
@@ -43,7 +45,7 @@ class ErrorBoundary extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            Icon(Icons.error_outline, size: 48, color: colorScheme.error),
             const SizedBox(height: 16),
             Text(
               message,
@@ -91,6 +93,8 @@ class _CollapsibleDebugDetailState extends State<_CollapsibleDebugDetail> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -102,12 +106,15 @@ class _CollapsibleDebugDetailState extends State<_CollapsibleDebugDetail> {
               Icon(
                 _expanded ? Icons.expand_less : Icons.expand_more,
                 size: 16,
-                color: Colors.grey,
+                color: colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 4),
-              const Text(
+              Text(
                 'Debug details',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant,
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
@@ -118,15 +125,15 @@ class _CollapsibleDebugDetailState extends State<_CollapsibleDebugDetail> {
             width: double.infinity,
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.grey.withValues(alpha: 0.1),
+              color: colorScheme.surfaceContainerLow,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               widget.detail,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
                 fontFamily: 'monospace',
-                color: Colors.grey,
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
           ),

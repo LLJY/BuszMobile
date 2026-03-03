@@ -7,7 +7,9 @@ import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../data/models/models.dart';
+import '../../../data/services/demo_frontline_service.dart';
 import '../../../data/services/frontline_service.dart';
+import '../../../data/services/frontline_service_base.dart';
 
 part 'search_providers.g.dart';
 
@@ -17,8 +19,11 @@ part 'search_providers.g.dart';
 
 /// Singleton FrontlineService instance shared across the app.
 @Riverpod(keepAlive: true)
-FrontlineService frontlineService(Ref ref) {
-  final service = FrontlineService();
+FrontlineServiceBase frontlineService(Ref ref) {
+  const isDemo = bool.fromEnvironment('DEMO', defaultValue: false);
+  final FrontlineServiceBase service = isDemo
+      ? DemoFrontlineService()
+      : FrontlineService();
   ref.onDispose(service.dispose);
   return service;
 }

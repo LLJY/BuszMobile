@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/skeleton_loaders.dart';
 import '../../../data/models/models.dart';
 import '../providers/services_at_stop_provider.dart';
 
@@ -51,16 +52,7 @@ class ServiceChipsBar extends ConsumerWidget {
           onServiceTap: onServiceTap,
         );
       },
-      loading: () => const SizedBox(
-        height: 56,
-        child: Center(
-          child: SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      ),
+      loading: () => const ServiceChipSkeleton(),
       // Silently hide on error — arrivals list still works.
       error: (_, _) => const SizedBox.shrink(),
     );
@@ -122,21 +114,46 @@ class _ServiceChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chipColor = AppTheme.parseHexColor(service.color);
+    final baseColor = AppTheme.parseHexColor(service.color);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    // M3 API: Generate a localized ColorScheme based on the bus service color.
+    final serviceScheme = ColorScheme.fromSeed(
+      seedColor: baseColor,
+      brightness: theme.brightness,
+    );
+
+    // Pick colors from the localized scheme for high quality Material 3 styling
+    final chipColor = isSelected
+        ? serviceScheme.primaryContainer
+        : colorScheme.surfaceContainerHighest;
+    final textColor = isSelected
+        ? serviceScheme.onPrimaryContainer
+        : colorScheme.onSurfaceVariant;
+    final badgeColor = isSelected ? serviceScheme.primary : baseColor;
+
+    // M3 API: Proper brightness estimation for dynamic colors
+    final badgeTextColor =
+        ThemeData.estimateBrightnessForColor(badgeColor) == Brightness.dark
+        ? Colors.white
+        : Colors.black87;
 
     return Material(
-      color: isSelected ? chipColor.withValues(alpha: 0.2) : Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
+            color: chipColor.withValues(alpha: isSelected ? 1.0 : 0.5),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: isSelected ? chipColor : Colors.grey.shade400,
-              width: isSelected ? 2.0 : 1.0,
+              color: isSelected
+                  ? serviceScheme.primary
+                  : colorScheme.outlineVariant,
+              width: isSelected ? 1.5 : 1.0,
             ),
           ),
           child: Row(
@@ -146,13 +163,13 @@ class _ServiceChip extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: chipColor,
+                  color: badgeColor,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   service.serviceNo,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: badgeTextColor,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
@@ -165,7 +182,13 @@ class _ServiceChip extends StatelessWidget {
                 constraints: const BoxConstraints(maxWidth: 100),
                 child: Text(
                   service.destination,
-                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: textColor,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

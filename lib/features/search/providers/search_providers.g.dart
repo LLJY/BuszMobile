@@ -18,11 +18,11 @@ final frontlineServiceProvider = FrontlineServiceProvider._();
 final class FrontlineServiceProvider
     extends
         $FunctionalProvider<
-          FrontlineService,
-          FrontlineService,
-          FrontlineService
+          FrontlineServiceBase,
+          FrontlineServiceBase,
+          FrontlineServiceBase
         >
-    with $Provider<FrontlineService> {
+    with $Provider<FrontlineServiceBase> {
   /// Singleton FrontlineService instance shared across the app.
   FrontlineServiceProvider._()
     : super(
@@ -40,24 +40,25 @@ final class FrontlineServiceProvider
 
   @$internal
   @override
-  $ProviderElement<FrontlineService> $createElement($ProviderPointer pointer) =>
-      $ProviderElement(pointer);
+  $ProviderElement<FrontlineServiceBase> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
 
   @override
-  FrontlineService create(Ref ref) {
+  FrontlineServiceBase create(Ref ref) {
     return frontlineService(ref);
   }
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(FrontlineService value) {
+  Override overrideWithValue(FrontlineServiceBase value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<FrontlineService>(value),
+      providerOverride: $SyncValueProvider<FrontlineServiceBase>(value),
     );
   }
 }
 
-String _$frontlineServiceHash() => r'f78005876366a63e2fe434d082521384a27bb693';
+String _$frontlineServiceHash() => r'b9415e0f6655efbe62c038af029033d77c4a93dd';
 
 /// The current search query text.
 

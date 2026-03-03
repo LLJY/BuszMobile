@@ -113,3 +113,36 @@ abstract class _$Favourites extends $AsyncNotifier<List<FavouriteStop>> {
     element.handleCreate(ref, build);
   }
 }
+
+@ProviderFor(tilePrecache)
+final tilePrecacheProvider = TilePrecacheProvider._();
+
+final class TilePrecacheProvider
+    extends $FunctionalProvider<AsyncValue<void>, void, FutureOr<void>>
+    with $FutureModifier<void>, $FutureProvider<void> {
+  TilePrecacheProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'tilePrecacheProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$tilePrecacheHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<void> $createElement($ProviderPointer pointer) =>
+      $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<void> create(Ref ref) {
+    return tilePrecache(ref);
+  }
+}
+
+String _$tilePrecacheHash() => r'915888594bdc3a8dd89af04b52f268ab8d4837d4';

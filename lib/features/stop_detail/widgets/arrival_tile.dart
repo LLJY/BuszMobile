@@ -1,7 +1,7 @@
 /// Arrival tile widget showing a single bus service's ETA info.
 ///
-/// Displays service number (colored), destination, N arrival times
-/// (up to [_maxEtaDisplay]), plate numbers, live/scheduled indicator,
+/// Displays service number (colored), destination, 2 arrival times
+/// (Next and Later), plate numbers, live/scheduled indicator,
 /// and debug metadata. Includes a 1-second countdown timer for
 /// client-side ETA interpolation between server polls.
 library;
@@ -13,9 +13,6 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
-
-/// Maximum number of arrivals to display in the ETA column.
-const int _maxEtaDisplay = 3;
 
 // =============================================================================
 // Arrival Tile (StatefulWidget for countdown timer)
@@ -58,22 +55,22 @@ class _ArrivalTileState extends State<ArrivalTile> {
   Widget build(BuildContext context) {
     final arrival = widget.arrival;
     final serviceColor = AppTheme.parseHexColor(arrival.color);
-    final theme = Theme.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
       color: widget.isSelected
           ? serviceColor.withValues(alpha: 0.15)
-          : theme.cardColor,
+          : colorScheme.surfaceContainerLow,
       child: InkWell(
         onTap: widget.onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppSpacing.m),
           child: Row(
             children: [
               // Service number badge
               _ServiceBadge(serviceNo: arrival.serviceNo, color: serviceColor),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpacing.m),
 
               // Destination + metadata
               Expanded(
@@ -117,6 +114,12 @@ class _ServiceBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // M3 API: Estimate the brightness of the color to choose the best
+    // contrasting text color (guaranteed legible).
+    final isDark =
+        ThemeData.estimateBrightnessForColor(color) == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
     return Container(
       width: 56,
       height: 36,
@@ -127,8 +130,8 @@ class _ServiceBadge extends StatelessWidget {
       ),
       child: Text(
         serviceNo,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: textColor,
           fontWeight: FontWeight.bold,
           fontSize: 14,
         ),
@@ -148,11 +151,12 @@ class _MetadataRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final parts = <Widget>[];
 
     // Plate number
     if (arrival.plateNo.isNotEmpty) {
-      parts.add(_tag(arrival.plateNo, Colors.grey));
+      parts.add(_tag(arrival.plateNo, colorScheme.onSurfaceVariant));
     }
 
     // ETA source
@@ -183,7 +187,7 @@ class _MetadataRow extends StatelessWidget {
         'DELAY_STATUS_ON_TIME' => Colors.green,
         'DELAY_STATUS_SLIGHT_DELAY' => Colors.orange,
         'DELAY_STATUS_HEAVY_DELAY' => Colors.red,
-        _ => Colors.grey,
+        _ => colorScheme.onSurfaceVariant,
       };
       parts.add(_tag(delayLabel, delayColor));
     }
@@ -224,7 +228,7 @@ class _MetadataRow extends StatelessWidget {
 }
 
 // =============================================================================
-// ETA Column (N arrival times, capped at _maxEtaDisplay)
+// ETA Column (Next and Later arrival times)
 // =============================================================================
 
 class _EtaColumn extends StatelessWidget {
@@ -235,37 +239,53 @@ class _EtaColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final arrivals = arrival.arrivals;
+    final colorScheme = Theme.of(context).colorScheme;
 
     if (arrivals.isEmpty) {
-      return Text(
-        '--',
-        style: TextStyle(
-          color: Colors.grey[600],
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
+      return SizedBox(
+        width: 92,
+        child: Center(
+          child: Text(
+            '--',
+            style: TextStyle(
+              color: colorScheme.onSurfaceVariant,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
       );
     }
 
-    final displayCount = arrivals.length > _maxEtaDisplay
-        ? _maxEtaDisplay
-        : arrivals.length;
+    return SizedBox(
+      width: 92,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Next Arrival
+          _EtaDisplay(arrivalTime: arrivals[0], isPrimary: true),
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (int i = 0; i < displayCount; i++) ...[
-          if (i > 0) const SizedBox(height: 4),
-          _EtaDisplay(arrivalTime: arrivals[i], isPrimary: i == 0),
+          if (arrivals.length > 1) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Divider(
+                height: 1,
+                thickness: 0.5,
+                color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+              ),
+            ),
+            // Later Arrival
+            _EtaDisplay(arrivalTime: arrivals[1], isPrimary: false),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
 
 // =============================================================================
-// ETA Display (single arrival time with live/scheduled indicator)
+// ETA Display (single arrival time with smart relative/absolute logic)
 // =============================================================================
 
 class _EtaDisplay extends StatelessWidget {
@@ -276,48 +296,55 @@ class _EtaDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (arrivalTime == null) {
-      return Text(
-        '--',
-        style: TextStyle(
-          color: Colors.grey[600],
-          fontSize: isPrimary ? 20 : 14,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    }
+    if (arrivalTime == null) return const SizedBox.shrink();
 
-    final minutes = arrivalTime!.time.difference(DateTime.now()).inMinutes;
-    final timeStr = DateFormat.Hm().format(arrivalTime!.time);
+    final now = DateTime.now();
+    final diff = arrivalTime!.time.difference(now);
+    final minutes = diff.inMinutes;
     final isLive = arrivalTime!.isLive;
     final isArriving = minutes <= 0;
 
-    final minuteText = isArriving ? 'ARR' : '${minutes}m';
-    final color = isLive ? Colors.green : Colors.orange;
+    // Use relative "Nm" if < 60 mins, otherwise show absolute "HH:mm"
+    final String displayText;
+    if (isArriving) {
+      displayText = 'ARR';
+    } else if (minutes < 60) {
+      displayText = '${minutes}m';
+    } else {
+      displayText = DateFormat.Hm().format(arrivalTime!.time);
+    }
+
+    // Color: Green for live, Orange for scheduled
+    final Color baseColor = isLive ? Colors.green : Colors.orange;
+
+    // Emphasis: Primary is bright and bold, Secondary is dimmed and slightly smaller
+    final Color displayColor = isPrimary
+        ? baseColor
+        : baseColor.withValues(alpha: 0.7);
+
+    final double fontSize = isPrimary ? 24 : 16;
+    final FontWeight fontWeight = isPrimary ? FontWeight.w900 : FontWeight.w600;
+
     final textStyle = TextStyle(
-      color: color,
-      fontSize: isPrimary ? 20 : 14,
-      fontWeight: FontWeight.bold,
+      color: displayColor,
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      letterSpacing: -0.5,
     );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isLive)
-              Icon(Icons.gps_fixed, size: 10, color: color)
-            else
-              Icon(Icons.schedule, size: 10, color: color),
-            const SizedBox(width: 3),
-            if (isArriving)
-              _PulsingText(text: minuteText, style: textStyle)
-            else
-              Text(minuteText, style: textStyle),
-          ],
-        ),
-        Text(timeStr, style: TextStyle(color: Colors.grey[500], fontSize: 10)),
+        if (isLive)
+          Icon(Icons.gps_fixed, size: isPrimary ? 12 : 9, color: displayColor)
+        else
+          Icon(Icons.schedule, size: isPrimary ? 12 : 9, color: displayColor),
+        const SizedBox(width: 2),
+        if (isArriving && isPrimary)
+          _PulsingText(text: displayText, style: textStyle)
+        else
+          Text(displayText, style: textStyle),
       ],
     );
   }

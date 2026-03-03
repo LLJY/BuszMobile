@@ -62,6 +62,18 @@ class _BusMapState extends State<BusMap> {
     }
   }
 
+  void _fitBounds(List<LatLng> points) {
+    if (points.isEmpty) return;
+    if (points.length == 1) {
+      _mapController.move(points.first, 15);
+    } else {
+      final bounds = LatLngBounds.fromPoints(points);
+      _mapController.fitCamera(
+        CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Calculate bounds to fit all markers
@@ -77,14 +89,7 @@ class _BusMapState extends State<BusMap> {
     if (points.isNotEmpty && !_hasFitted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        if (points.length == 1) {
-          _mapController.move(points.first, 15);
-        } else {
-          final bounds = LatLngBounds.fromPoints(points);
-          _mapController.fitCamera(
-            CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
-          );
-        }
+        _fitBounds(points);
         _hasFitted = true;
       });
     }
@@ -94,6 +99,11 @@ class _BusMapState extends State<BusMap> {
       options: MapOptions(
         initialCenter: points.isNotEmpty ? points.first : defaultCenter,
         initialZoom: 14,
+        onMapReady: () {
+          if (points.isNotEmpty) {
+            _fitBounds(points);
+          }
+        },
       ),
       children: [
         // OSM tile layer
@@ -170,6 +180,7 @@ class _BusMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final hasHeading = location.heading != 0;
 
     // Build label: "J10 · 5m" or "J10 · ARR" or "J10" (no ETA)
@@ -186,7 +197,7 @@ class _BusMarker extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
-            color: Colors.black87,
+            color: colorScheme.inverseSurface,
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
@@ -194,8 +205,8 @@ class _BusMarker extends StatelessWidget {
             children: [
               Text(
                 '${location.serviceNo}$etaText',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: colorScheme.onInverseSurface,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                 ),
@@ -204,7 +215,10 @@ class _BusMarker extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   '${location.speedKmh.toStringAsFixed(0)}km/h',
-                  style: TextStyle(color: Colors.grey[400], fontSize: 9),
+                  style: TextStyle(
+                    color: colorScheme.onInverseSurface.withValues(alpha: 0.75),
+                    fontSize: 9,
+                  ),
                 ),
               ],
             ],

@@ -20,22 +20,24 @@ void main() async {
   // Initialize authentication (nonce-challenge with ECDSA P-256)
   await _initializeAuth();
 
-  runApp(const ProviderScope(child: MyBuszDebugApp()));
+  runApp(const ProviderScope(child: BuszMobileApp()));
 }
 
 // =============================================================================
 // App Widget
 // =============================================================================
 
-class MyBuszDebugApp extends StatelessWidget {
-  const MyBuszDebugApp({super.key});
+class BuszMobileApp extends StatelessWidget {
+  const BuszMobileApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'BuszMobile',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.system,
       routerConfig: appRouter,
     );
   }

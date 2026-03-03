@@ -3,6 +3,7 @@ library;
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../core/services/tile_precache.dart';
 import '../models/favourite.dart';
 import 'favourites_store.dart';
 
@@ -61,5 +62,25 @@ class Favourites extends _$Favourites {
     await store.rename(busStopCode, alias);
     ref.invalidateSelf();
     await future;
+  }
+}
+
+// =============================================================================
+// Tile Precache Provider
+// =============================================================================
+
+@riverpod
+Future<void> tilePrecache(Ref ref) async {
+  final favourites = await ref.watch(favouritesProvider.future);
+  final locations = favourites
+      .where(
+        (favourite) =>
+            favourite.latitude != null && favourite.longitude != null,
+      )
+      .map((favourite) => (lat: favourite.latitude!, lng: favourite.longitude!))
+      .toList();
+
+  if (locations.isNotEmpty) {
+    await TilePrecache.precacheForLocations(locations);
   }
 }

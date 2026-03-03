@@ -81,6 +81,10 @@ class _ServiceBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final badgeColor = _parseHexColor(color);
+    final isDark =
+        ThemeData.estimateBrightnessForColor(badgeColor) == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -89,8 +93,8 @@ class _ServiceBadge extends StatelessWidget {
       ),
       child: Text(
         serviceNo,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: textColor,
           fontWeight: FontWeight.bold,
           fontSize: 16,
         ),
@@ -123,6 +127,14 @@ class _RouteViewBodyState extends State<_RouteViewBody> {
     super.dispose();
   }
 
+  void _fitBounds(List<LatLng> points) {
+    if (points.isEmpty) return;
+    final bounds = LatLngBounds.fromPoints(points);
+    _mapController.fitCamera(
+      CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final routeColor = _parseHexColor(widget.data.color);
@@ -135,21 +147,16 @@ class _RouteViewBodyState extends State<_RouteViewBody> {
     // Collect all points for bounds fitting
     final allPoints = <LatLng>[...polylinePoints, ...stopPoints];
 
-    // Default center: Johor Bahru
-    const defaultCenter = LatLng(1.4927, 103.7414);
+    // Default center: First point of route or JB
+    final initialCenter = allPoints.isNotEmpty
+        ? allPoints.first
+        : const LatLng(1.4927, 103.7414);
 
     // Fit bounds on first render
     if (allPoints.isNotEmpty && !_hasFitted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        if (allPoints.length == 1) {
-          _mapController.move(allPoints.first, 15);
-        } else {
-          final bounds = LatLngBounds.fromPoints(allPoints);
-          _mapController.fitCamera(
-            CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
-          );
-        }
+        _fitBounds(allPoints);
         _hasFitted = true;
       });
     }
@@ -160,10 +167,13 @@ class _RouteViewBodyState extends State<_RouteViewBody> {
         FlutterMap(
           mapController: _mapController,
           options: MapOptions(
-            initialCenter: allPoints.isNotEmpty
-                ? allPoints.first
-                : defaultCenter,
+            initialCenter: initialCenter,
             initialZoom: 13,
+            onMapReady: () {
+              if (allPoints.isNotEmpty) {
+                _fitBounds(allPoints);
+              }
+            },
           ),
           children: [
             // OSM tile layer
@@ -266,7 +276,7 @@ class _StopDot extends StatelessWidget {
 // Stop Sequence Draggable Sheet
 // =============================================================================
 
-class _StopSequenceSheet extends StatelessWidget {
+class _StopSequenceSheet extends StatefulWidget {
   final List<StopOnRoute> stops;
   final String? highlightStopCode;
   final Color routeColor;
@@ -282,15 +292,43 @@ class _StopSequenceSheet extends StatelessWidget {
   });
 
   @override
+  State<_StopSequenceSheet> createState() => _StopSequenceSheetState();
+}
+
+class _StopSequenceSheetState extends State<_StopSequenceSheet> {
+  final DraggableScrollableController _sheetController =
+      DraggableScrollableController();
+  bool _hasScrolled = false;
+
+  @override
   Widget build(BuildContext context) {
-    final sortedStops = List<StopOnRoute>.from(stops)
+    final colorScheme = Theme.of(context).colorScheme;
+    final sortedStops = List<StopOnRoute>.from(widget.stops)
       ..sort((a, b) => a.sequenceNo.compareTo(b.sequenceNo));
 
     return DraggableScrollableSheet(
+      controller: _sheetController,
       initialChildSize: 0.3,
       minChildSize: 0.08,
       maxChildSize: 0.7,
+      snap: true,
       builder: (context, scrollController) {
+        // Auto-scroll logic when sheet is ready
+        if (widget.highlightStopCode != null && !_hasScrolled) {
+          final index = sortedStops.indexWhere(
+            (s) => s.busStopCode == widget.highlightStopCode,
+          );
+          if (index != -1) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (scrollController.hasClients) {
+                // Item height is roughly 44 pixels
+                scrollController.jumpTo(index * 44.0);
+                _hasScrolled = true;
+              }
+            });
+          }
+        }
+
         return Container(
           decoration: BoxDecoration(
             color: Theme.of(context).scaffoldBackgroundColor,
@@ -312,7 +350,7 @@ class _StopSequenceSheet extends StatelessWidget {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey[400],
+                    color: colorScheme.outline,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -323,7 +361,7 @@ class _StopSequenceSheet extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    Icon(Icons.route, color: routeColor, size: 20),
+                    Icon(Icons.route, color: widget.routeColor, size: 20),
                     const SizedBox(width: 8),
                     Text(
                       '${sortedStops.length} stops',
@@ -345,7 +383,8 @@ class _StopSequenceSheet extends StatelessWidget {
                   itemCount: sortedStops.length,
                   itemBuilder: (context, index) {
                     final stop = sortedStops[index];
-                    final isHighlighted = stop.busStopCode == highlightStopCode;
+                    final isHighlighted =
+                        stop.busStopCode == widget.highlightStopCode;
                     final isFirst = index == 0;
                     final isLast = index == sortedStops.length - 1;
 
@@ -354,9 +393,9 @@ class _StopSequenceSheet extends StatelessWidget {
                       isHighlighted: isHighlighted,
                       isFirst: isFirst,
                       isLast: isLast,
-                      routeColor: routeColor,
-                      onTap: () => onStopTap(stop.busStopCode),
-                      onFocus: () => onStopFocus(stop),
+                      routeColor: widget.routeColor,
+                      onTap: () => widget.onStopTap(stop.busStopCode),
+                      onFocus: () => widget.onStopFocus(stop),
                     );
                   },
                 ),
@@ -394,6 +433,8 @@ class _StopSequenceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return InkWell(
       onTap: onTap,
       onLongPress: onFocus,
@@ -436,7 +477,7 @@ class _StopSequenceTile extends StatelessWidget {
                     stop.busStopCode,
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.grey[500],
+                      color: colorScheme.outline,
                       fontFamily: 'monospace',
                     ),
                   ),
@@ -448,14 +489,14 @@ class _StopSequenceTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: Colors.grey[200],
+                color: colorScheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
                 '#${stop.sequenceNo}',
                 style: TextStyle(
                   fontSize: 10,
-                  color: Colors.grey[600],
+                  color: colorScheme.onSurfaceVariant,
                   fontFamily: 'monospace',
                 ),
               ),
