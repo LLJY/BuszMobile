@@ -62,7 +62,7 @@ class StopDetailScreen extends ConsumerWidget {
               icon: const Icon(Icons.clear),
               tooltip: 'Clear filter',
               onPressed: () {
-                ref.read(selectedServiceProvider.notifier).state = null;
+                ref.read(selectedServiceProvider.notifier).select(null);
               },
             ),
           // Refresh indicator
@@ -88,8 +88,9 @@ class StopDetailScreen extends ConsumerWidget {
           stopLongitude: stopLongitude,
           onServiceTap: (serviceNo) {
             final current = ref.read(selectedServiceProvider);
-            ref.read(selectedServiceProvider.notifier).state =
-                current == serviceNo ? null : serviceNo;
+            ref
+                .read(selectedServiceProvider.notifier)
+                .select(current == serviceNo ? null : serviceNo);
           },
         ),
         loading: () => const Center(child: CircularProgressIndicator()),

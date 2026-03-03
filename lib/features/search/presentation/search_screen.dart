@@ -55,7 +55,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 prefixIcon: Icon(Icons.search),
               ),
               onChanged: (value) {
-                ref.read(searchQueryProvider.notifier).state = value;
+                ref.read(searchQueryProvider.notifier).update(value);
               },
             ),
           ),
