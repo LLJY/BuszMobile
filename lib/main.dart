@@ -1,4 +1,4 @@
-/// MyBusz Debug - Bus ETA debugging tool with live map.
+/// BuszMobile - Reference implementation for MyBusz gRPC endpoints.
 ///
 /// Entry point: loads .env credentials, initializes auth, launches app
 /// with go_router and Riverpod.
@@ -33,7 +33,7 @@ class MyBuszDebugApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'MyBusz Debug',
+      title: 'BuszMobile',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       routerConfig: appRouter,

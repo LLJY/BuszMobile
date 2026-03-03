@@ -99,7 +99,7 @@ class _BusMapState extends State<BusMap> {
         // OSM tile layer
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'dev.floatpoint.mybusz_debug',
+          userAgentPackageName: 'dev.floatpoint.busz_mobile',
         ),
 
         // Bus stop marker

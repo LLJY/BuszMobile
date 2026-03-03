@@ -1,4 +1,4 @@
-/// Domain models for the MyBusz Debug app.
+/// Domain models for BuszMobile.
 ///
 /// Lightweight models mapped from protobuf types by FrontlineService.
 library;

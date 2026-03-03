@@ -40,7 +40,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final results = ref.watch(searchResultsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('MyBusz Debug')),
+      appBar: AppBar(title: const Text('BuszMobile')),
       body: Column(
         children: [
           // Search bar

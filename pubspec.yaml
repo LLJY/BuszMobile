@@ -1,5 +1,5 @@
-name: mybusz_debug
-description: "MyBusz - Real-time bus arrivals and live tracking for Johor Bahru transit"
+name: busz_mobile
+description: "BuszMobile - Reference implementation for MyBusz gRPC endpoints"
 publish_to: 'none'
 
 version: 0.1.0+1

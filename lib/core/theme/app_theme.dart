@@ -1,4 +1,4 @@
-/// App theme for MyBusz Debug.
+/// App theme for BuszMobile.
 ///
 /// Dark theme by default - a debug/developer tool aesthetic.
 library;

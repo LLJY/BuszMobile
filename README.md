@@ -1,8 +1,8 @@
-# MyBusz
+# BuszMobile
 
-Real-time bus arrivals and live tracking for Johor Bahru public transit.
+Reference implementation for MyBusz gRPC endpoints.
 
-Flutter reference app for the [MyBusz-Services](https://github.com/your-org/MyBusz-Services) backend.
+Flutter app demonstrating real-time bus arrivals and live tracking for Johor Bahru public transit.
 
 ## Features
 
