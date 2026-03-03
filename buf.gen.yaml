@@ -1,0 +1,8 @@
+version: v2
+plugins:
+  # Connect-RPC Dart client generation (remote - generates compatible code)
+  - remote: buf.build/connectrpc/dart
+    out: lib/gen
+  # Protobuf Dart message classes (local - uses compatible protoc_plugin 21.0.0)
+  - local: protoc-gen-dart
+    out: lib/gen

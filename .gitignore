@@ -1,0 +1,67 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code
+.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+/android/local.properties
+
+# Secrets (never commit - use .env.example as template)
+.env
+.env.json
+
+# Archives and binaries
+*.zip
+*.tar.gz
+
+# Generated protobuf code (regenerate from protos/ submodule)
+lib/gen/
+
+# Proto source files (will be a git submodule - keep protos/README.md only)
+protos/common/
+protos/frontline/
+protos/google/
+
+# Platform-specific build caches
+/android/.gradle/
+/android/.kotlin/
+/linux/flutter/generated_plugins.cmake
+/macos/Flutter/GeneratedPluginRegistrant.swift
