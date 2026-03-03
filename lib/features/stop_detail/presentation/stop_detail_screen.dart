@@ -277,9 +277,10 @@ class _StopDetailBodyState extends State<_StopDetailBody> {
                 ? _sheetController.size
                 : 1.0;
 
-            // Hide FAB when at the bottom (minimized) OR when no service is selected
+            // Requirement: "hide the FAB when at the bottommost position"
+            // Visible if not at bottom AND a service is selected
             final bool visible =
-                widget.selectedService != null && currentSize > 0.2;
+                widget.selectedService != null && currentSize > 0.25;
 
             return AnimatedPositioned(
               duration: const Duration(milliseconds: 200),
@@ -328,7 +329,8 @@ class _ArrivalsSheet extends StatefulWidget {
 
 class _ArrivalsSheetState extends State<_ArrivalsSheet> {
   bool _isUnselecting = false;
-  bool _isLockedAtMid = true;
+  // Start unlocked so initial 1.0 state is possible
+  bool _isLockedAtMid = false;
 
   @override
   void initState() {
@@ -347,18 +349,23 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
 
     final size = widget.controller.size;
 
-    // Reset lock when sheet goes below midpoint
-    if (size < 0.45 && !_isLockedAtMid) {
+    // Lock it if it snaps to 0.5 via dragging
+    if (size >= 0.49 && size <= 0.51 && !_isLockedAtMid) {
       setState(() => _isLockedAtMid = true);
     }
 
+    // Reset lock when sheet moves away from midpoint significantly
+    if ((size < 0.45 || size > 0.55) && _isLockedAtMid) {
+      setState(() => _isLockedAtMid = false);
+    }
+
     // Unselect logic: If dragged to the very top (1.0), dismiss map/selection.
-    if (widget.selectedService != null && size >= 0.98) {
+    if (widget.selectedService != null && size >= 0.99) {
       _isUnselecting = true;
       Future.microtask(() {
         widget.onServiceTap(widget.selectedService!);
         _isUnselecting = false;
-        setState(() => _isLockedAtMid = true);
+        setState(() => _isLockedAtMid = false);
       });
     }
   }
@@ -369,12 +376,21 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
     // Requirement: "when you select a bus... snap to 50%"
     if (widget.selectedService != null && oldWidget.selectedService == null) {
       if (widget.controller.isAttached) {
-        setState(() => _isLockedAtMid = true);
-        widget.controller.animateTo(
-          0.5,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOutCubic,
-        );
+        // Unlock to allow movement
+        setState(() => _isLockedAtMid = false);
+
+        widget.controller
+            .animateTo(
+              0.5,
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOutCubic,
+            )
+            .then((_) {
+              // Once animation finishes, lock it at 50% to allow internal scrolling
+              if (mounted && widget.selectedService != null) {
+                setState(() => _isLockedAtMid = true);
+              }
+            });
       }
     }
   }
@@ -397,11 +413,8 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
         // This makes the list scroll internally at that point.
         final double maxChildSize = _isLockedAtMid ? 0.5 : 1.0;
 
-        // Ensure initial/min sizes are valid relative to max
         const double minChildSize = 0.18;
-        final double initialChildSize = (widget.selectedService == null)
-            ? 1.0
-            : currentSize.clamp(minChildSize, maxChildSize);
+        const double initialChildSize = 1.0;
 
         return DraggableScrollableSheet(
           controller: widget.controller,
@@ -409,12 +422,11 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
           minChildSize: minChildSize,
           maxChildSize: maxChildSize,
           snap: true,
-          snapSizes: const [0.18, 0.5], // We only snap to stops we can reach
+          snapSizes: const [0.18, 0.5],
           builder: (context, scrollController) {
             return NotificationListener<ScrollNotification>(
               onNotification: (notification) {
                 // Requirement: "if you FLICK all the way up, then this will be skipped"
-                // Implementation: Catch high velocity scroll at the boundary.
                 if (notification is ScrollEndNotification &&
                     _isLockedAtMid &&
                     currentSize >= 0.49 &&
@@ -447,25 +459,29 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
                 ),
                 child: Column(
                   children: [
-                    // Drag handle - Wrap in GestureDetector to "unlock" sheet
-                    // Requirement: "you must use the grabber" to move the sheet at 50%
+                    // Expanded Drag area
+                    // Requirement: "increase the touch area... to the entire top... plus somemore padding"
                     GestureDetector(
                       onVerticalDragStart: (_) {
+                        // Unlock when using the grabber
                         if (_isLockedAtMid) {
                           setState(() => _isLockedAtMid = false);
                         }
                       },
                       behavior: HitTestBehavior.opaque,
-                      child: Opacity(
-                        opacity: isFullscreen ? 0 : 1,
-                        child: Center(
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(vertical: 12),
-                            width: 36,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: colorScheme.outlineVariant,
-                              borderRadius: BorderRadius.circular(2),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.only(top: 12, bottom: 20),
+                        child: Opacity(
+                          opacity: isFullscreen ? 0 : 1,
+                          child: Center(
+                            child: Container(
+                              width: 36,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: colorScheme.outlineVariant,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
                           ),
                         ),
