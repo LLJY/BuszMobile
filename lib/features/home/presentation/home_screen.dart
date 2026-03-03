@@ -8,6 +8,7 @@
 /// - Full deduplication: Favourite stops are hidden from Nearby and Search Results.
 library;
 
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,6 +37,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
+  bool _isEditMode = false;
 
   @override
   void dispose() {
@@ -61,49 +63,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.watch(tilePrecacheProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('BuszMobile')),
+      appBar: AppBar(
+        title: const Text('BuszMobile'),
+        actions: [
+          if (_isEditMode)
+            TextButton(
+              onPressed: () => setState(() => _isEditMode = false),
+              child: const Text('Done'),
+            ),
+        ],
+      ),
       body: Column(
         children: [
-          // Unified Search Bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: TextField(
-              controller: _searchController,
-              focusNode: _searchFocusNode,
-              decoration: InputDecoration(
-                hintText: 'Search bus stops...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: isSearching
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          ref.read(searchQueryProvider.notifier).update('');
-                          _searchFocusNode.unfocus();
-                        },
-                      )
-                    : null,
+          // Unified Search Bar - hide when editing favourites
+          if (!_isEditMode)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                decoration: InputDecoration(
+                  hintText: 'Search bus stops...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: isSearching
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            ref.read(searchQueryProvider.notifier).update('');
+                            _searchFocusNode.unfocus();
+                          },
+                        )
+                      : null,
+                ),
+                onChanged: (value) {
+                  ref.read(searchQueryProvider.notifier).update(value);
+                },
               ),
-              onChanged: (value) {
-                ref.read(searchQueryProvider.notifier).update(value);
-              },
             ),
-          ),
 
           Expanded(
             child: ListView(
               padding: const EdgeInsets.only(bottom: AppSpacing.xl),
               children: [
                 // Favourites section (always visible)
-                _FavouritesSection(favouritesAsync: favouritesAsync),
+                _FavouritesSection(
+                  favouritesAsync: favouritesAsync,
+                  isEditMode: _isEditMode,
+                  onEditModeToggle: () => setState(() => _isEditMode = true),
+                ),
 
-                if (isSearching)
-                  // Search Results (deduplicated against favourites)
-                  _SearchResultsSection(favouritesAsync: favouritesAsync)
-                else ...[
-                  // Nearby stops (mobile only, hidden when searching, deduped)
+                if (!isSearching && !_isEditMode) ...[
+                  // Nearby stops (mobile only, hidden when searching or editing)
                   if (_isMobilePlatform)
                     _NearbyStopsSection(favouritesAsync: favouritesAsync),
+                ] else if (isSearching && !_isEditMode) ...[
+                  // Search Results (deduplicated against favourites)
+                  _SearchResultsSection(favouritesAsync: favouritesAsync),
                 ],
               ],
             ),
@@ -121,7 +137,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 class _NearbyStopsSection extends ConsumerWidget {
   final AsyncValue<List<FavouriteStop>> favouritesAsync;
 
-  const _NearbyStopsSection({required this.favouritesAsync});
+  const _NearbyStopsSection({required this.favouritesAsync, super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -170,7 +186,7 @@ class _NearbyStopsSection extends ConsumerWidget {
 class _SearchResultsSection extends ConsumerWidget {
   final AsyncValue<List<FavouriteStop>> favouritesAsync;
 
-  const _SearchResultsSection({required this.favouritesAsync});
+  const _SearchResultsSection({required this.favouritesAsync, super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -253,17 +269,36 @@ class _SearchResultsSection extends ConsumerWidget {
 // Favourites Section
 // =============================================================================
 
-class _FavouritesSection extends StatelessWidget {
+class _FavouritesSection extends ConsumerWidget {
   final AsyncValue<List<FavouriteStop>> favouritesAsync;
+  final bool isEditMode;
+  final VoidCallback onEditModeToggle;
 
-  const _FavouritesSection({required this.favouritesAsync});
+  const _FavouritesSection({
+    required this.favouritesAsync,
+    required this.isEditMode,
+    required this.onEditModeToggle,
+    super.key,
+  });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: 'Favourites', icon: Icons.star),
+        _SectionHeader(
+          title: 'Favourites',
+          icon: Icons.star,
+          trailing: isEditMode
+              ? null
+              : favouritesAsync.asData?.value.isNotEmpty == true
+              ? IconButton(
+                  icon: const Icon(Icons.edit, size: 18),
+                  onPressed: onEditModeToggle,
+                  tooltip: 'Edit favourites',
+                )
+              : null,
+        ),
         favouritesAsync.when(
           loading: () => const Padding(
             padding: EdgeInsets.symmetric(
@@ -293,18 +328,122 @@ class _FavouritesSection extends StatelessWidget {
           ),
           data: (favourites) {
             if (favourites.isEmpty) return const _EmptyFavouritesPrompt();
+
+            if (isEditMode) {
+              // Create a local copy for the reorderable list
+              final localFavs = List<FavouriteStop>.from(favourites);
+              return ReorderableListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
+                itemCount: localFavs.length,
+                onReorder: (oldIndex, newIndex) {
+                  if (newIndex > oldIndex) newIndex -= 1;
+                  final item = localFavs.removeAt(oldIndex);
+                  localFavs.insert(newIndex, item);
+                  unawaited(
+                    ref
+                        .read(favouritesProvider.notifier)
+                        .reorder(localFavs.map((f) => f.busStopCode).toList()),
+                  );
+                },
+                itemBuilder: (context, index) {
+                  return _FavouriteEditCard(
+                    key: ValueKey(localFavs[index].busStopCode),
+                    favourite: localFavs[index],
+                  );
+                },
+              );
+            }
+
             return ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
               itemCount: favourites.length,
               itemBuilder: (context, index) {
-                return _FavouriteCard(favourite: favourites[index]);
+                return _FavouriteCard(
+                  favourite: favourites[index],
+                  onLongPress: onEditModeToggle,
+                );
               },
             );
           },
         ),
       ],
+    );
+  }
+}
+
+// =============================================================================
+// Favourite Edit Card
+// =============================================================================
+
+class _FavouriteEditCard extends ConsumerWidget {
+  final FavouriteStop favourite;
+
+  const _FavouriteEditCard({required this.favourite, super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Card.filled(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: IconButton(
+          icon: const Icon(Icons.remove_circle, color: Colors.red),
+          onPressed: () => ref
+              .read(favouritesProvider.notifier)
+              .remove(favourite.busStopCode),
+        ),
+        title: Text(
+          favourite.customAlias ?? favourite.busStopName,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        subtitle: Text(
+          favourite.busStopCode,
+          style: const TextStyle(fontSize: 12),
+        ),
+        trailing: const Icon(Icons.drag_handle),
+        onTap: () async {
+          final newAlias = await _showRenameDialog(context, favourite);
+          if (newAlias != null) {
+            ref
+                .read(favouritesProvider.notifier)
+                .rename(
+                  favourite.busStopCode,
+                  newAlias.isEmpty ? null : newAlias,
+                );
+          }
+        },
+      ),
+    );
+  }
+
+  Future<String?> _showRenameDialog(BuildContext context, FavouriteStop stop) {
+    final controller = TextEditingController(text: stop.customAlias);
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rename Favourite'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: 'Enter custom name',
+            labelText: 'Nickname',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -316,7 +455,7 @@ class _FavouritesSection extends StatelessWidget {
 class _StopListTile extends StatelessWidget {
   final BusStopSearchResult stop;
 
-  const _StopListTile({required this.stop});
+  const _StopListTile({required this.stop, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -384,7 +523,7 @@ class _StopListTile extends StatelessWidget {
 class _NearbyStopCard extends StatelessWidget {
   final NearbyStop stop;
 
-  const _NearbyStopCard({required this.stop});
+  const _NearbyStopCard({required this.stop, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -508,8 +647,13 @@ class _NearbyStopCard extends StatelessWidget {
 
 class _FavouriteCard extends StatelessWidget {
   final FavouriteStop favourite;
+  final VoidCallback onLongPress;
 
-  const _FavouriteCard({required this.favourite});
+  const _FavouriteCard({
+    required this.favourite,
+    required this.onLongPress,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -523,14 +667,7 @@ class _FavouriteCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () => _navigateToStop(context),
-          onLongPress: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Edit mode coming soon'),
-                duration: Duration(seconds: 2),
-              ),
-            );
-          },
+          onLongPress: onLongPress,
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.m),
             child: Row(
@@ -606,8 +743,14 @@ class _FavouriteCard extends StatelessWidget {
 class _SectionHeader extends StatelessWidget {
   final String title;
   final IconData icon;
+  final Widget? trailing;
 
-  const _SectionHeader({required this.title, required this.icon});
+  const _SectionHeader({
+    required this.title,
+    required this.icon,
+    this.trailing,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -626,6 +769,8 @@ class _SectionHeader extends StatelessWidget {
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
+          const Spacer(),
+          if (trailing != null) trailing!,
         ],
       ),
     );
@@ -635,7 +780,7 @@ class _SectionHeader extends StatelessWidget {
 class _MiniServiceChip extends StatelessWidget {
   final String serviceNo;
 
-  const _MiniServiceChip({required this.serviceNo});
+  const _MiniServiceChip({required this.serviceNo, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -689,7 +834,7 @@ class _MiniServiceChip extends StatelessWidget {
 }
 
 class _LocationLoadingIndicator extends StatefulWidget {
-  const _LocationLoadingIndicator();
+  const _LocationLoadingIndicator({super.key});
 
   @override
   State<_LocationLoadingIndicator> createState() =>
@@ -770,7 +915,7 @@ class _LocationLoadingIndicatorState extends State<_LocationLoadingIndicator>
 }
 
 class _EmptyFavouritesPrompt extends StatelessWidget {
-  const _EmptyFavouritesPrompt();
+  const _EmptyFavouritesPrompt({super.key});
 
   @override
   Widget build(BuildContext context) {
