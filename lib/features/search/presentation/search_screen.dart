@@ -41,7 +41,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final results = ref.watch(searchResultsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('BuszMobile')),
+      appBar: AppBar(title: const Text('Search')),
       body: Column(
         children: [
           // Search bar
@@ -50,7 +50,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             child: TextField(
               controller: _controller,
               focusNode: _focusNode,
-              autofocus: true,
+              autofocus: false,
               decoration: const InputDecoration(
                 hintText: 'Search bus stops...',
                 prefixIcon: Icon(Icons.search),

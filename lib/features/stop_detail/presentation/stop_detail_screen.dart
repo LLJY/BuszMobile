@@ -12,6 +12,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/error/error_boundary.dart';
+import '../../../data/local/favourites_providers.dart';
+import '../../../data/models/favourite.dart';
 import '../../../data/models/models.dart';
 import '../providers/stop_detail_providers.dart';
 import '../widgets/arrival_tile.dart';
@@ -57,6 +59,38 @@ class StopDetailScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          // Favourite toggle button
+          Consumer(
+            builder: (context, ref, _) {
+              final favourites = ref.watch(favouritesProvider);
+              final isFav =
+                  favourites.value?.any((f) => f.busStopCode == busStopCode) ??
+                  false;
+              return IconButton(
+                icon: Icon(isFav ? Icons.star : Icons.star_border),
+                color: isFav ? Colors.amber : null,
+                tooltip: isFav ? 'Remove from favourites' : 'Add to favourites',
+                onPressed: () {
+                  final notifier = ref.read(favouritesProvider.notifier);
+                  if (isFav) {
+                    notifier.remove(busStopCode);
+                  } else {
+                    notifier.add(
+                      FavouriteStop(
+                        busStopCode: busStopCode,
+                        busStopName: busStopName,
+                        latitude: stopLatitude,
+                        longitude: stopLongitude,
+                        serviceNos: const [],
+                        sortOrder: 0,
+                        addedAt: DateTime.now(),
+                      ),
+                    );
+                  }
+                },
+              );
+            },
+          ),
           // Clear filter button
           if (selectedService != null)
             IconButton(

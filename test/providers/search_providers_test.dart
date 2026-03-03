@@ -43,6 +43,16 @@ class MockFrontlineService implements FrontlineService {
   }
 
   @override
+  Future<List<NearbyStop>> findNearbyStops(
+    double lat,
+    double lng, {
+    double radiusMeters = 500,
+    int limit = 10,
+  }) async {
+    throw UnimplementedError('Not used in search tests');
+  }
+
+  @override
   void dispose() {}
 }
 

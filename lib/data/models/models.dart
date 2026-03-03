@@ -131,6 +131,50 @@ class ArrivalTime {
 }
 
 // =============================================================================
+// Nearby Stop
+// =============================================================================
+
+/// A bus stop near the user's current GPS location.
+///
+/// Returned by [FrontlineService.findNearbyStops], sorted by distance.
+class NearbyStop {
+  /// The unique bus stop code identifier.
+  final String busStopCode;
+
+  /// The display name of the bus stop.
+  final String busStopName;
+
+  /// Latitude of the bus stop.
+  final double latitude;
+
+  /// Longitude of the bus stop.
+  final double longitude;
+
+  /// Distance from the user's location in metres.
+  final double distanceMeters;
+
+  /// Bus service numbers that serve this stop.
+  final List<String> serviceNos;
+
+  /// The next arrival at this stop, if available.
+  final ArrivalTime? nextArrival;
+
+  const NearbyStop({
+    required this.busStopCode,
+    required this.busStopName,
+    required this.latitude,
+    required this.longitude,
+    required this.distanceMeters,
+    required this.serviceNos,
+    this.nextArrival,
+  });
+
+  @override
+  String toString() =>
+      'NearbyStop($busStopCode: $busStopName, ${distanceMeters.round()}m)';
+}
+
+// =============================================================================
 // Bus Location Info
 // =============================================================================
 

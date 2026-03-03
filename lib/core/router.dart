@@ -3,6 +3,7 @@ library;
 
 import 'package:go_router/go_router.dart';
 
+import '../features/home/presentation/home_screen.dart';
 import '../features/search/presentation/search_screen.dart';
 import '../features/stop_detail/presentation/stop_detail_screen.dart';
 
@@ -13,7 +14,8 @@ import '../features/stop_detail/presentation/stop_detail_screen.dart';
 final appRouter = GoRouter(
   initialLocation: '/',
   routes: [
-    GoRoute(path: '/', builder: (context, state) => const SearchScreen()),
+    GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
+    GoRoute(path: '/search', builder: (context, state) => const SearchScreen()),
     GoRoute(
       path: '/stop/:code',
       builder: (context, state) {

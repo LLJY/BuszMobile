@@ -167,8 +167,71 @@ class FrontlineService {
   }
 
   // ===========================================================================
+  // Find Nearby Stops
+  // ===========================================================================
+
+  /// Finds bus stops near the given GPS coordinates.
+  ///
+  /// [lat] / [lng] - The user's current GPS position
+  /// [radiusMeters] - Search radius in metres (default: 500)
+  /// [limit] - Maximum number of results (default: 10)
+  Future<List<NearbyStop>> findNearbyStops(
+    double lat,
+    double lng, {
+    double radiusMeters = 500,
+    int limit = 10,
+  }) async {
+    final client = _getClient();
+    final request = pb.FindNearbyStopsRequest()
+      ..ensureLocation().latitude = lat
+      ..ensureLocation().longitude = lng
+      ..radiusMeters = radiusMeters
+      ..limit = limit;
+    final headers = await _getAuthHeaders();
+
+    late final pb.FindNearbyStopsResponse response;
+    try {
+      response = await client.findNearbyStops(request, headers: headers);
+    } catch (e) {
+      if (_isAuthError(e)) {
+        debugPrint('[Frontline] Auth error on findNearbyStops, refreshing...');
+        try {
+          await _authService.forceRefresh();
+          final retryHeaders = await _getAuthHeaders();
+          response = await client.findNearbyStops(
+            request,
+            headers: retryHeaders,
+          );
+        } catch (retryError) {
+          throw AppException.from(retryError);
+        }
+      } else {
+        throw AppException.from(e);
+      }
+    }
+
+    return response.stops.map(_mapNearbyStop).toList();
+  }
+
+  // ===========================================================================
   // Private: Mapping
   // ===========================================================================
+
+  /// Maps protobuf NearbyStopResult to domain model.
+  NearbyStop _mapNearbyStop(pb.NearbyStopResult proto) {
+    final hasLocation = proto.busStop.hasLocation();
+    return NearbyStop(
+      busStopCode: proto.busStop.code,
+      busStopName: proto.busStop.name,
+      latitude: hasLocation ? proto.busStop.location.latitude : 0,
+      longitude: hasLocation ? proto.busStop.location.longitude : 0,
+      distanceMeters: proto.distanceMeters,
+      serviceNos: proto.serviceNos.toList(),
+      nextArrival: proto.hasNextArrival()
+          ? _mapArrivalTime(proto.nextArrival)
+          : null,
+    );
+  }
 
   /// Maps protobuf StopArrivalsData to domain model.
   StopArrivalsData _mapStopArrivalsData(pb.StopArrivalsData proto) {
