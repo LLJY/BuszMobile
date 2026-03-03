@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="100%" height="100%">
+    <!-- 
+      Note: The background is transparent and the shapes are white. 
+      If you open this in a web browser with a white background, it might be invisible. 
+      To test with the original dark blue background, uncomment the line below:
+    -->
+    <!-- <rect width="100%" height="100%" fill="#102447" /> -->
+
+    <defs>
+        <!-- Mask to cut out the transparent windows from the bus body -->
+        <mask id="bus-windows">
+            <rect x="0" y="0" width="240" height="240" fill="white" />
+            <!-- Rear Window -->
+            <rect x="70" y="86" width="14" height="18" rx="2" fill="black" />
+            <!-- Middle Window 1 -->
+            <rect x="88" y="86" width="18" height="18" rx="2" fill="black" />
+            <!-- Middle Window 2 -->
+            <rect x="110" y="86" width="18" height="18" rx="2" fill="black" />
+            <!-- Front Window (Sloped) -->
+            <path d="M 132 86 L 152 86 Q 160 86, 161 93 L 163 102 Q 163 104, 160 104 L 132 104 Q 130 104, 130 102 L 130 88 Q 130 86, 132 86 Z" fill="black" />
+        </mask>
+    </defs>
+
+    <g fill="#FFFFFF">
+        <!-- Wifi Symbol Top -->
+        <circle cx="120" cy="70" r="4" />
+        <path d="M 111.5 61.5 A 12 12 0 0 1 128.5 61.5" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M 104.4 54.4 A 22 22 0 0 1 135.6 54.4" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M 97.4 47.4 A 32 32 0 0 1 142.6 47.4" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+
+        <!-- Main Bus Body -->
+        <path mask="url(#bus-windows)" d="
+            M 75 80
+            L 155 80
+            Q 170 80, 173 90
+            L 176 90
+            Q 178 90, 178 93
+            L 178 95
+            Q 178 97, 176 97
+            L 174 97
+            L 174 105
+            Q 174 120, 160 120
+            L 148 120
+            A 11 11 0 0 1 126 120
+            L 100 120
+            A 11 11 0 0 1 78 120
+            L 75 120
+            Q 65 120, 65 105
+            L 65 90
+            Q 65 80, 75 80 Z" />
+
+        <!-- Bus Wheels -->
+        <circle cx="89" cy="120" r="6" />
+        <circle cx="137" cy="120" r="6" />
+
+        <!-- Straight Road Line -->
+        <path d="M 52 126 L 188 126 L 185 129 L 55 129 Z" />
+
+        <!-- Curved Road Lines -->
+        <!-- Left Curve -->
+        <path d="M 116 129 C 100 135, 85 145, 72 160 L 75 162 C 88 147, 102 138, 120 129 Z" />
+        <!-- Right Curve -->
+        <path d="M 136 129 C 120 135, 105 150, 95 170 L 98 172 C 108 152, 123 138, 140 129 Z" />
+
+        <!-- Location Pin -->
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M 150 162 L 142.9 149.1 A 10 10 0 1 1 157.1 149.1 Z M 150 138 A 4 4 0 1 0 150 146 A 4 4 0 1 0 150 138 Z" />
+    </g>
+</svg>
