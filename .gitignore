@@ -52,6 +52,9 @@ app.*.map.json
 *.zip
 *.tar.gz
 
+# Internal planning docs (not for public repo)
+plan/
+
 # Generated protobuf code (regenerate from protos/ submodule)
 lib/gen/
 
