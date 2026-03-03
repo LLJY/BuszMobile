@@ -329,7 +329,7 @@ class _ArrivalsSheet extends StatefulWidget {
 
 class _ArrivalsSheetState extends State<_ArrivalsSheet> {
   bool _isUnselecting = false;
-  // Start unlocked so initial 1.0 state is possible
+  // Use a ValueNotifier to track boundary hits for smooth transition
   bool _isLockedAtMid = false;
 
   @override
@@ -349,6 +349,7 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
 
     final size = widget.controller.size;
 
+    // Requirement: "at 50% expansion... allow for scrolling"
     // Lock it if it snaps to 0.5 via dragging
     if (size >= 0.49 && size <= 0.51 && !_isLockedAtMid) {
       setState(() => _isLockedAtMid = true);
@@ -408,7 +409,6 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
         final bool isFullscreen = currentSize >= 0.95;
         final double cornerRadius = isFullscreen ? 0 : 20;
 
-        // Requirement: "at 50% expansion... allow for scrolling of the main list without moving the bottomsheet"
         // Implementation: We set maxChildSize to 0.5 when locked.
         // This makes the list scroll internally at that point.
         final double maxChildSize = _isLockedAtMid ? 0.5 : 1.0;
@@ -426,6 +426,19 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
           builder: (context, scrollController) {
             return NotificationListener<ScrollNotification>(
               onNotification: (notification) {
+                // Requirement: "simply scroll up when the list hits the max scroll up, then scroll the bottomsheet"
+                // Check if the scroll reached the boundaries
+                if (notification is ScrollUpdateNotification &&
+                    _isLockedAtMid) {
+                  final metrics = notification.metrics;
+
+                  // Reached BOTTOM of list (max scroll up) and continuing to drag UP (delta > 0)
+                  if (metrics.pixels >= metrics.maxScrollExtent &&
+                      notification.scrollDelta! > 0) {
+                    setState(() => _isLockedAtMid = false);
+                  }
+                }
+
                 // Requirement: "if you FLICK all the way up, then this will be skipped"
                 if (notification is ScrollEndNotification &&
                     _isLockedAtMid &&
@@ -460,7 +473,6 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
                 child: Column(
                   children: [
                     // Expanded Drag area
-                    // Requirement: "increase the touch area... to the entire top... plus somemore padding"
                     GestureDetector(
                       onVerticalDragStart: (_) {
                         // Unlock when using the grabber
