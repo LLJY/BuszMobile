@@ -220,11 +220,11 @@ jobs:
 
       - name: Build macOS (with credentials)
         if: hashFiles('.env.json') != ''
-        run: flutter build macos --release --no-codesign --dart-define-from-file=.env.json
+        run: flutter build macos --release --dart-define-from-file=.env.json
 
       - name: Build macOS (without credentials)
         if: hashFiles('.env.json') == ''
-        run: flutter build macos --release --no-codesign
+        run: flutter build macos --release
 
       - name: Clean up secrets
         if: always()
