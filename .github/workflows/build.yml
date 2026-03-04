@@ -24,6 +24,24 @@ concurrency:
 
 jobs:
   # ===========================================================================
+  # Tests
+  # ===========================================================================
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+
+  # ===========================================================================
   # Android APK
   # ===========================================================================
   android:
@@ -224,3 +242,73 @@ jobs:
         with:
           name: macos-app
           path: BuszMobile-macOS.zip
+
+  # ===========================================================================
+  # Publish Release
+  # ===========================================================================
+  release:
+    name: Publish Release
+    needs: [test, android, linux, macos]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          cp artifacts/android-apk/app-release.apk    release/BuszMobile-Android.apk
+          cp artifacts/linux-appimage/*.AppImage        release/BuszMobile-Linux.AppImage
+          cp artifacts/macos-app/BuszMobile-macOS.zip   release/BuszMobile-macOS.zip
+
+      - name: Generate release tag and notes
+        id: meta
+        run: |
+          TAG="v0.1.0-build.$(date -u +%Y%m%d.%H%M)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          # Collect commits since last tag (or all if no tags yet)
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            COMMITS=$(git log "$LAST_TAG"..HEAD --oneline --no-merges)
+          else
+            COMMITS=$(git log --oneline --no-merges -20)
+          fi
+
+          cat > release_notes.md << EOF
+          ## BuszMobile $TAG
+
+          **Built from** [\`${GITHUB_SHA::7}\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+
+          ### Downloads
+          | Platform | File |
+          |----------|------|
+          | Android | \`BuszMobile-Android.apk\` |
+          | Linux | \`BuszMobile-Linux.AppImage\` |
+          | macOS | \`BuszMobile-macOS.zip\` |
+
+          ### Changes
+          \`\`\`
+          $COMMITS
+          \`\`\`
+          EOF
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.meta.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --title "BuszMobile ${{ steps.meta.outputs.tag }}" \
+            --notes-file release_notes.md \
+            release/BuszMobile-Android.apk \
+            release/BuszMobile-Linux.AppImage \
+            release/BuszMobile-macOS.zip

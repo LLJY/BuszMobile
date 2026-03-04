@@ -51,6 +51,11 @@ app.*.map.json
 # Archives and binaries
 *.zip
 *.tar.gz
+*.apk
+*.aab
+*.ipa
+*.dmg
+*.AppImage
 
 # Internal planning docs (not for public repo)
 plan/
