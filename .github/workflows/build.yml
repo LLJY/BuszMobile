@@ -73,7 +73,7 @@ jobs:
             --arg key "$FRONTLINE_PRIVATE_KEY" \
             --arg url "$AUTH_BASE_URL" \
             --arg id  "$FRONTLINE_CLIENT_ID" \
-            '{FRONTLINE_PRIVATE_KEY: $key, AUTH_BASE_URL: $url, FRONTLINE_CLIENT_ID: $id}' \
+            '{FRONTLINE_PRIVATE_KEY: ($key | gsub("\n"; "\\n")), AUTH_BASE_URL: $url, FRONTLINE_CLIENT_ID: $id}' \
             > .env.json
 
       - name: Build APK (with credentials)
@@ -125,7 +125,7 @@ jobs:
             --arg key "$FRONTLINE_PRIVATE_KEY" \
             --arg url "$AUTH_BASE_URL" \
             --arg id  "$FRONTLINE_CLIENT_ID" \
-            '{FRONTLINE_PRIVATE_KEY: $key, AUTH_BASE_URL: $url, FRONTLINE_CLIENT_ID: $id}' \
+            '{FRONTLINE_PRIVATE_KEY: ($key | gsub("\n"; "\\n")), AUTH_BASE_URL: $url, FRONTLINE_CLIENT_ID: $id}' \
             > .env.json
 
       - name: Build Linux (with credentials)
@@ -215,7 +215,7 @@ jobs:
             --arg key "$FRONTLINE_PRIVATE_KEY" \
             --arg url "$AUTH_BASE_URL" \
             --arg id  "$FRONTLINE_CLIENT_ID" \
-            '{FRONTLINE_PRIVATE_KEY: $key, AUTH_BASE_URL: $url, FRONTLINE_CLIENT_ID: $id}' \
+            '{FRONTLINE_PRIVATE_KEY: ($key | gsub("\n"; "\\n")), AUTH_BASE_URL: $url, FRONTLINE_CLIENT_ID: $id}' \
             > .env.json
 
       - name: Build macOS (with credentials)
