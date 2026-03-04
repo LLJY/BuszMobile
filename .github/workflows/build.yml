@@ -69,13 +69,12 @@ jobs:
           AUTH_BASE_URL: ${{ secrets.AUTH_BASE_URL }}
           FRONTLINE_CLIENT_ID: ${{ secrets.FRONTLINE_CLIENT_ID }}
         run: |
-          cat > .env.json << EOF
-          {
-            "FRONTLINE_PRIVATE_KEY": "$FRONTLINE_PRIVATE_KEY",
-            "AUTH_BASE_URL": "$AUTH_BASE_URL",
-            "FRONTLINE_CLIENT_ID": "$FRONTLINE_CLIENT_ID"
-          }
-          EOF
+          jq -n \
+            --arg key "$FRONTLINE_PRIVATE_KEY" \
+            --arg url "$AUTH_BASE_URL" \
+            --arg id  "$FRONTLINE_CLIENT_ID" \
+            '{FRONTLINE_PRIVATE_KEY: $key, AUTH_BASE_URL: $url, FRONTLINE_CLIENT_ID: $id}' \
+            > .env.json
 
       - name: Build APK (with credentials)
         if: hashFiles('.env.json') != ''
@@ -122,13 +121,12 @@ jobs:
           AUTH_BASE_URL: ${{ secrets.AUTH_BASE_URL }}
           FRONTLINE_CLIENT_ID: ${{ secrets.FRONTLINE_CLIENT_ID }}
         run: |
-          cat > .env.json << EOF
-          {
-            "FRONTLINE_PRIVATE_KEY": "$FRONTLINE_PRIVATE_KEY",
-            "AUTH_BASE_URL": "$AUTH_BASE_URL",
-            "FRONTLINE_CLIENT_ID": "$FRONTLINE_CLIENT_ID"
-          }
-          EOF
+          jq -n \
+            --arg key "$FRONTLINE_PRIVATE_KEY" \
+            --arg url "$AUTH_BASE_URL" \
+            --arg id  "$FRONTLINE_CLIENT_ID" \
+            '{FRONTLINE_PRIVATE_KEY: $key, AUTH_BASE_URL: $url, FRONTLINE_CLIENT_ID: $id}' \
+            > .env.json
 
       - name: Build Linux (with credentials)
         if: hashFiles('.env.json') != ''
@@ -213,13 +211,12 @@ jobs:
           AUTH_BASE_URL: ${{ secrets.AUTH_BASE_URL }}
           FRONTLINE_CLIENT_ID: ${{ secrets.FRONTLINE_CLIENT_ID }}
         run: |
-          cat > .env.json << EOF
-          {
-            "FRONTLINE_PRIVATE_KEY": "$FRONTLINE_PRIVATE_KEY",
-            "AUTH_BASE_URL": "$AUTH_BASE_URL",
-            "FRONTLINE_CLIENT_ID": "$FRONTLINE_CLIENT_ID"
-          }
-          EOF
+          jq -n \
+            --arg key "$FRONTLINE_PRIVATE_KEY" \
+            --arg url "$AUTH_BASE_URL" \
+            --arg id  "$FRONTLINE_CLIENT_ID" \
+            '{FRONTLINE_PRIVATE_KEY: $key, AUTH_BASE_URL: $url, FRONTLINE_CLIENT_ID: $id}' \
+            > .env.json
 
       - name: Build macOS (with credentials)
         if: hashFiles('.env.json') != ''
