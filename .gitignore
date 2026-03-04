@@ -60,8 +60,8 @@ app.*.map.json
 # Internal planning docs (not for public repo)
 plan/
 
-# Generated protobuf code (regenerate from protos/ submodule)
-lib/gen/
+# Generated protobuf code — committed for CI simplicity.
+# Regenerate locally with: buf generate
 
 # Proto source files (will be a git submodule - keep protos/README.md only)
 protos/common/
