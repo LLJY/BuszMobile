@@ -278,6 +278,12 @@ class AuthService {
   // ===========================================================================
 
   /// Parse a PEM-encoded EC private key into a PointyCastle ECPrivateKey.
+  ///
+  /// Supports both formats:
+  ///   - SEC 1 / Traditional:  `-----BEGIN EC PRIVATE KEY-----`
+  ///     SEQUENCE { INTEGER(1), OCTET STRING(key), ... }
+  ///   - PKCS#8:               `-----BEGIN PRIVATE KEY-----`
+  ///     SEQUENCE { INTEGER(0), SEQUENCE(algId), OCTET STRING(wrapped SEC1) }
   ECPrivateKey _parsePemPrivateKey(String pem) {
     // Normalize escaped newlines
     final normalized = pem.replaceAll('\\n', '\n');
@@ -287,13 +293,26 @@ class AuthService {
         .join('');
     final derBytes = base64Decode(lines);
 
-    // Parse ASN.1 DER structure for EC private key (SEC 1 format)
     final asn1Parser = ASN1Parser(Uint8List.fromList(derBytes));
     final sequence = asn1Parser.nextObject() as ASN1Sequence;
 
-    // Extract private key bytes (second element in sequence)
-    final privateKeyOctet = sequence.elements![1] as ASN1OctetString;
-    final d = _bytesToBigInt(privateKeyOctet.valueBytes!);
+    Uint8List privateKeyBytes;
+
+    if (sequence.elements![1] is ASN1OctetString) {
+      // SEC 1: element[1] is the raw private key octet string
+      final octet = sequence.elements![1] as ASN1OctetString;
+      privateKeyBytes = octet.valueBytes!;
+    } else {
+      // PKCS#8: element[1] is SEQUENCE (algorithm identifier),
+      //         element[2] is OCTET STRING wrapping a SEC 1 DER structure
+      final wrappedKey = sequence.elements![2] as ASN1OctetString;
+      final innerParser = ASN1Parser(wrappedKey.valueBytes!);
+      final innerSequence = innerParser.nextObject() as ASN1Sequence;
+      final innerOctet = innerSequence.elements![1] as ASN1OctetString;
+      privateKeyBytes = innerOctet.valueBytes!;
+    }
+
+    final d = _bytesToBigInt(privateKeyBytes);
 
     // Use P-256 curve parameters
     final params = ECCurve_secp256r1();
