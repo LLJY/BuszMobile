@@ -61,8 +61,13 @@ class DemoFrontlineService implements FrontlineServiceBase {
         'P401': <String>['JB005', 'JB002', 'JB001'],
       };
 
+  /// Semicolon-separated polyline covering all demo stops in JB.
+  /// Format matches backend PolylineUtils: "lat,lon;lat,lon;..."
   static const String _demoPolyline =
-      'm{cAq~qiR?eBB{@@k@Bi@Dk@@Q?QAQCOGQIMEICKr@gAHM';
+      '1.4627,103.7641;1.4633,103.7644;1.4639,103.7647;'
+      '1.4644,103.7648;1.4648,103.7649;1.4680,103.7650;'
+      '1.4720,103.7550;1.4750,103.7400;1.4785,103.7270;'
+      '1.4800,103.7400;1.4820,103.7580;1.4850,103.7746';
 
   @override
   Future<List<BusStopSearchResult>> searchBusStops(

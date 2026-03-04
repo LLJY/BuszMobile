@@ -1,7 +1,7 @@
 /// Route view screen showing a bus service's full route on a map.
 ///
 /// Displays:
-/// - Encoded polyline decoded and drawn in the service colour
+/// - Semicolon-separated polyline parsed and drawn in the service colour
 /// - Stop markers along the route (small dots, name on tap)
 /// - Optional highlighted stop (when navigated from stop detail)
 /// - Draggable bottom sheet with ordered stop sequence list
@@ -138,7 +138,7 @@ class _RouteViewBodyState extends State<_RouteViewBody> {
   @override
   Widget build(BuildContext context) {
     final routeColor = _parseHexColor(widget.data.color);
-    final polylinePoints = _decodePolyline(widget.data.encodedPolyline);
+    final polylinePoints = _parsePolyline(widget.data.encodedPolyline);
     final stopPoints = widget.data.stops
         .where((s) => s.latitude != 0 && s.longitude != 0)
         .map((s) => LatLng(s.latitude, s.longitude))
@@ -299,6 +299,12 @@ class _StopSequenceSheetState extends State<_StopSequenceSheet> {
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
   bool _hasScrolled = false;
+
+  @override
+  void dispose() {
+    _sheetController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -597,41 +603,25 @@ Color _parseHexColor(String hex) {
   return Colors.grey;
 }
 
-/// Decodes a Google encoded polyline string into a list of [LatLng] points.
+/// Parses a semicolon-separated polyline string into a list of [LatLng].
 ///
-/// Implements Google's Encoded Polyline Algorithm:
-/// https://developers.google.com/maps/documentation/utilities/polylinealgorithm
-List<LatLng> _decodePolyline(String encoded) {
+/// Backend format: "lat1,lon1;lat2,lon2;..."
+/// Matches [PolylineUtils.DecodePolyline] in MyBusz.Shared.Infrastructure.
+List<LatLng> _parsePolyline(String encoded) {
   if (encoded.isEmpty) return [];
 
   final points = <LatLng>[];
-  var index = 0;
-  var lat = 0;
-  var lng = 0;
-
-  while (index < encoded.length) {
-    // Decode latitude
-    var shift = 0;
-    var result = 0;
-    int b;
-    do {
-      b = encoded.codeUnitAt(index++) - 63;
-      result |= (b & 0x1f) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-    lat += (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
-
-    // Decode longitude
-    shift = 0;
-    result = 0;
-    do {
-      b = encoded.codeUnitAt(index++) - 63;
-      result |= (b & 0x1f) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-    lng += (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
-
-    points.add(LatLng(lat / 1e5, lng / 1e5));
+  for (final pair in encoded.split(';')) {
+    final trimmed = pair.trim();
+    if (trimmed.isEmpty) continue;
+    final coords = trimmed.split(',');
+    if (coords.length == 2) {
+      final lat = double.tryParse(coords[0]);
+      final lng = double.tryParse(coords[1]);
+      if (lat != null && lng != null) {
+        points.add(LatLng(lat, lng));
+      }
+    }
   }
 
   return points;

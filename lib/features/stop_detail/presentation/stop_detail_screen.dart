@@ -277,8 +277,7 @@ class _StopDetailBodyState extends State<_StopDetailBody> {
                 ? _sheetController.size
                 : 1.0;
 
-            // Requirement: "hide the FAB when at the bottommost position"
-            // Visible if not at bottom AND a service is selected
+            // Hide FAB when at the bottom (minimized) OR when no service is selected
             final bool visible =
                 widget.selectedService != null && currentSize > 0.25;
 
@@ -329,8 +328,8 @@ class _ArrivalsSheet extends StatefulWidget {
 
 class _ArrivalsSheetState extends State<_ArrivalsSheet> {
   bool _isUnselecting = false;
-  // Use a ValueNotifier to track boundary hits for smooth transition
-  bool _isLockedAtMid = false;
+  // This state allows us to "pause" the sheet at 50% while scrolling the list
+  bool _isHoldingAtMid = false;
 
   @override
   void initState() {
@@ -349,15 +348,15 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
 
     final size = widget.controller.size;
 
-    // Requirement: "at 50% expansion... allow for scrolling"
-    // Lock it if it snaps to 0.5 via dragging
-    if (size >= 0.49 && size <= 0.51 && !_isLockedAtMid) {
-      setState(() => _isLockedAtMid = true);
+    // Requirement: "snap to 50%... allow for scrolling of the main list without moving the bottomsheet"
+    // If the sheet hits exactly 50% (via drag or snap), we enable the "holding" state.
+    if (size >= 0.49 && size <= 0.51 && !_isHoldingAtMid) {
+      setState(() => _isHoldingAtMid = true);
     }
 
-    // Reset lock when sheet moves away from midpoint significantly
-    if ((size < 0.45 || size > 0.55) && _isLockedAtMid) {
-      setState(() => _isLockedAtMid = false);
+    // Release the hold if we move significantly away from 50%
+    if ((size < 0.45 || size > 0.55) && _isHoldingAtMid) {
+      setState(() => _isHoldingAtMid = false);
     }
 
     // Unselect logic: If dragged to the very top (1.0), dismiss map/selection.
@@ -366,7 +365,7 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
       Future.microtask(() {
         widget.onServiceTap(widget.selectedService!);
         _isUnselecting = false;
-        setState(() => _isLockedAtMid = false);
+        _isHoldingAtMid = false;
       });
     }
   }
@@ -374,11 +373,10 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
   @override
   void didUpdateWidget(_ArrivalsSheet oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Requirement: "when you select a bus... snap to 50%"
+    // Service selected: snap sheet to 50%
     if (widget.selectedService != null && oldWidget.selectedService == null) {
       if (widget.controller.isAttached) {
-        // Unlock to allow movement
-        setState(() => _isLockedAtMid = false);
+        _isHoldingAtMid = false;
 
         widget.controller
             .animateTo(
@@ -387,12 +385,13 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
               curve: Curves.easeOutCubic,
             )
             .then((_) {
-              // Once animation finishes, lock it at 50% to allow internal scrolling
-              if (mounted && widget.selectedService != null) {
-                setState(() => _isLockedAtMid = true);
-              }
+              // _onScroll listener catches 0.5 and sets _isHoldingAtMid.
             });
       }
+    }
+    // Service deselected: reset hold state
+    if (widget.selectedService == null && oldWidget.selectedService != null) {
+      _isHoldingAtMid = false;
     }
   }
 
@@ -409,12 +408,15 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
         final bool isFullscreen = currentSize >= 0.95;
         final double cornerRadius = isFullscreen ? 0 : 20;
 
-        // Implementation: We set maxChildSize to 0.5 when locked.
-        // This makes the list scroll internally at that point.
-        final double maxChildSize = _isLockedAtMid ? 0.5 : 1.0;
+        // Implementation of the "Mid-point Scroll Lock":
+        // We set maxChildSize to 0.5 when we want the list to scroll internally.
+        final double maxChildSize =
+            (widget.selectedService != null && _isHoldingAtMid) ? 0.5 : 1.0;
 
         const double minChildSize = 0.18;
-        const double initialChildSize = 1.0;
+        // Must satisfy initialChildSize <= maxChildSize on every rebuild.
+        // The controller manages the actual position after the first build.
+        final double initialChildSize = maxChildSize;
 
         return DraggableScrollableSheet(
           controller: widget.controller,
@@ -426,31 +428,25 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
           builder: (context, scrollController) {
             return NotificationListener<ScrollNotification>(
               onNotification: (notification) {
-                // Requirement: "simply scroll up when the list hits the max scroll up, then scroll the bottomsheet"
-                // Check if the scroll reached the boundaries
-                if (notification is ScrollUpdateNotification &&
-                    _isLockedAtMid) {
+                // When held at 50% and the user has scrolled to the
+                // bottom of the list, unlock maxChildSize and animate
+                // the sheet to fullscreen so the map is covered.
+                if (notification is ScrollEndNotification && _isHoldingAtMid) {
                   final metrics = notification.metrics;
-
-                  // Reached BOTTOM of list (max scroll up) and continuing to drag UP (delta > 0)
-                  if (metrics.pixels >= metrics.maxScrollExtent &&
-                      notification.scrollDelta! > 0) {
-                    setState(() => _isLockedAtMid = false);
+                  if (metrics.maxScrollExtent > 0 &&
+                      metrics.pixels >= metrics.maxScrollExtent) {
+                    setState(() => _isHoldingAtMid = false);
+                    // Wait for rebuild (maxChildSize → 1.0) then animate.
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (widget.controller.isAttached) {
+                        widget.controller.animateTo(
+                          1.0,
+                          duration: const Duration(milliseconds: 400),
+                          curve: Curves.easeOutCubic,
+                        );
+                      }
+                    });
                   }
-                }
-
-                // Requirement: "if you FLICK all the way up, then this will be skipped"
-                if (notification is ScrollEndNotification &&
-                    _isLockedAtMid &&
-                    currentSize >= 0.49 &&
-                    notification.dragDetails != null &&
-                    notification.dragDetails!.primaryVelocity! < -1000) {
-                  setState(() => _isLockedAtMid = false);
-                  widget.controller.animateTo(
-                    1.0,
-                    duration: const Duration(milliseconds: 400),
-                    curve: Curves.easeOutCubic,
-                  );
                 }
                 return false;
               },
@@ -472,28 +468,19 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
                 ),
                 child: Column(
                   children: [
-                    // Expanded Drag area
-                    GestureDetector(
-                      onVerticalDragStart: (_) {
-                        // Unlock when using the grabber
-                        if (_isLockedAtMid) {
-                          setState(() => _isLockedAtMid = false);
-                        }
-                      },
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.only(top: 12, bottom: 20),
-                        child: Opacity(
-                          opacity: isFullscreen ? 0 : 1,
-                          child: Center(
-                            child: Container(
-                              width: 36,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: colorScheme.outlineVariant,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
+                    // Drag handle indicator (cosmetic)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.only(top: 12, bottom: 20),
+                      child: Opacity(
+                        opacity: isFullscreen ? 0 : 1,
+                        child: Center(
+                          child: Container(
+                            width: 36,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: colorScheme.outlineVariant,
+                              borderRadius: BorderRadius.circular(2),
                             ),
                           ),
                         ),
@@ -609,7 +596,8 @@ class _ArrivalsList extends ConsumerWidget {
       },
       child: ListView.builder(
         controller: scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
+        physics:
+            const ClampingScrollPhysics(), // Important for boundary detection
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         itemCount: sortedBuses.length,
         itemBuilder: (context, index) {

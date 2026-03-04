@@ -1,41 +1,65 @@
 /// Providers for the stop detail feature.
 ///
-/// Uses StreamStopArrivals for real-time push updates, with 15s polling
-/// fallback if the stream fails. All providers are autoDispose to stop
-/// the stream or polling when the screen is left.
+/// Fetches stop arrivals in streaming or polling mode based on user settings.
+/// Both modes include automatic retry with exponential backoff for transient
+/// connection errors (e.g. HTTP/2 forceful termination).
+///
+/// All providers are autoDispose to stop the stream/polling when the screen
+/// is left.
 library;
 
 import 'dart:async';
+import 'dart:math' show min;
 
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../data/local/settings_providers.dart';
+import '../../../data/local/settings_store.dart';
 import '../../../data/models/models.dart';
 import '../../search/providers/search_providers.dart';
 
 part 'stop_detail_providers.g.dart';
 
 // =============================================================================
-// Stop Arrivals Provider (streaming with polling fallback)
+// Constants
 // =============================================================================
 
-/// Streams stop arrivals with bus locations via server-streaming RPC.
+/// Maximum backoff between retries.
+const _maxBackoff = Duration(seconds: 30);
+
+/// Maximum consecutive retries before surfacing the error.
+const _maxRetries = 5;
+
+// =============================================================================
+// Stop Arrivals Provider
+// =============================================================================
+
+/// Streams stop arrivals based on the current [AppSettings.dataMode].
 ///
-/// Falls back to 15-second polling if the stream fails to connect.
-/// Auto-disposes when the stop detail screen is left, stopping the stream
-/// or polling loop and freeing network/battery resources.
+/// - **Streaming**: Uses server-streaming RPC with auto-retry on connection
+///   errors. Falls back to polling if retries are exhausted.
+/// - **Polling**: Periodic unary RPC at the configured interval.
+///
+/// Auto-disposes when the stop detail screen is left.
 @riverpod
 Stream<StopArrivalsData> stopArrivals(Ref ref, String busStopCode) async* {
+  final settings = ref.watch(appSettingsProvider);
   final service = ref.watch(frontlineServiceProvider);
 
-  try {
-    // Primary: server-streaming RPC for real-time push updates
-    yield* service.streamStopArrivals(busStopCode, includeBusLocations: true);
-  } catch (e) {
-    debugPrint('[StopArrivals] Stream failed, falling back to polling: $e');
-    // Fallback: poll every 15 seconds using the unary RPC
-    yield* _pollingStream(
-      interval: const Duration(seconds: 15),
+  final pollInterval = Duration(seconds: settings.pollingIntervalSeconds);
+
+  if (settings.dataMode == DataMode.streaming) {
+    yield* _streamWithRetry(
+      stream: () =>
+          service.streamStopArrivals(busStopCode, includeBusLocations: true),
+      fallbackFetch: () =>
+          service.getStopArrivals(busStopCode, includeBusLocations: true),
+      fallbackInterval: pollInterval,
+    );
+  } else {
+    yield* _pollingWithRetry(
+      interval: pollInterval,
       fetch: () =>
           service.getStopArrivals(busStopCode, includeBusLocations: true),
     );
@@ -76,30 +100,113 @@ List<BusLocationInfo> filteredBusLocations(Ref ref, String busStopCode) {
 }
 
 // =============================================================================
-// Private: Polling Helper
+// Private: Streaming with Retry
 // =============================================================================
 
-/// Creates a stream that polls [fetch] at [interval], yielding each result.
+/// Streams data with automatic reconnection on transient errors.
 ///
-/// Both initial and subsequent fetch errors are yielded as stream errors
-/// but do not terminate the stream - polling continues regardless.
-Stream<T> _pollingStream<T>({
+/// On error the stream waits with exponential backoff (1s → 2s → 4s → ...
+/// capped at [_maxBackoff]), then retries. After [_maxRetries] consecutive
+/// failures the stream falls back to polling.
+///
+/// Successful data resets the retry counter.
+Stream<T> _streamWithRetry<T>({
+  required Stream<T> Function() stream,
+  required Future<T> Function() fallbackFetch,
+  required Duration fallbackInterval,
+}) async* {
+  var retries = 0;
+
+  while (retries < _maxRetries) {
+    try {
+      await for (final data in stream()) {
+        retries = 0; // Reset on success
+        yield data;
+      }
+      // Stream ended cleanly (server closed) — reconnect immediately
+      debugPrint('[StopArrivals] Stream ended, reconnecting...');
+    } catch (e) {
+      retries++;
+      final backoff = _exponentialBackoff(retries);
+      debugPrint(
+        '[StopArrivals] Stream error (attempt $retries/$_maxRetries), '
+        'retrying in ${backoff.inSeconds}s: $e',
+      );
+      await Future<void>.delayed(backoff);
+    }
+  }
+
+  // Retries exhausted — fall back to polling
+  debugPrint('[StopArrivals] Retries exhausted, falling back to polling');
+  yield* _pollingWithRetry(interval: fallbackInterval, fetch: fallbackFetch);
+}
+
+// =============================================================================
+// Private: Polling with Retry
+// =============================================================================
+
+/// Polls [fetch] at [interval], retrying transient errors with backoff.
+///
+/// The first fetch is attempted immediately. On error the poll backs off
+/// (capped at [_maxBackoff]) then resumes the normal interval on success.
+/// Subsequent fetch errors do NOT terminate the stream — the last
+/// successful value stays visible to the UI.
+Stream<T> _pollingWithRetry<T>({
   required Duration interval,
   required Future<T> Function() fetch,
 }) async* {
-  // Fetch immediately on first subscribe
-  yield await fetch();
+  var consecutiveErrors = 0;
 
-  // Then poll at interval
+  // Initial fetch with retry
   while (true) {
-    await Future.delayed(interval);
+    try {
+      yield await fetch();
+      consecutiveErrors = 0;
+      break;
+    } catch (e) {
+      consecutiveErrors++;
+      if (consecutiveErrors >= _maxRetries) {
+        debugPrint(
+          '[Polling] Initial fetch failed after $_maxRetries attempts',
+        );
+        rethrow; // Surface to UI as error state
+      }
+      final backoff = _exponentialBackoff(consecutiveErrors);
+      debugPrint(
+        '[Polling] Initial fetch error (attempt $consecutiveErrors), '
+        'retrying in ${backoff.inSeconds}s: $e',
+      );
+      await Future<void>.delayed(backoff);
+    }
+  }
+
+  // Steady-state polling
+  while (true) {
+    await Future<void>.delayed(interval);
 
     try {
       yield await fetch();
+      consecutiveErrors = 0;
     } catch (e) {
-      debugPrint('[Polling] Fetch error: $e');
-      // Don't rethrow on subsequent errors - keep polling.
-      // The previous value stays visible to the UI.
+      consecutiveErrors++;
+      final backoff = _exponentialBackoff(consecutiveErrors);
+      debugPrint(
+        '[Polling] Fetch error ($consecutiveErrors consecutive), '
+        'next retry in ${backoff.inSeconds}s: $e',
+      );
+      // Don't rethrow — keep polling. Previous value stays visible.
+      // Use backoff instead of normal interval for next attempt.
+      await Future<void>.delayed(backoff - interval);
     }
   }
+}
+
+// =============================================================================
+// Private: Backoff
+// =============================================================================
+
+/// Exponential backoff: 1s, 2s, 4s, 8s, 16s, capped at [_maxBackoff].
+Duration _exponentialBackoff(int attempt) {
+  final seconds = min(1 << (attempt - 1), _maxBackoff.inSeconds);
+  return Duration(seconds: seconds);
 }

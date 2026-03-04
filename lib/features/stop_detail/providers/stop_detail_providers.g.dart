@@ -8,20 +8,24 @@ part of 'stop_detail_providers.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Streams stop arrivals with bus locations via server-streaming RPC.
+/// Streams stop arrivals based on the current [AppSettings.dataMode].
 ///
-/// Falls back to 15-second polling if the stream fails to connect.
-/// Auto-disposes when the stop detail screen is left, stopping the stream
-/// or polling loop and freeing network/battery resources.
+/// - **Streaming**: Uses server-streaming RPC with auto-retry on connection
+///   errors. Falls back to polling if retries are exhausted.
+/// - **Polling**: Periodic unary RPC at the configured interval.
+///
+/// Auto-disposes when the stop detail screen is left.
 
 @ProviderFor(stopArrivals)
 final stopArrivalsProvider = StopArrivalsFamily._();
 
-/// Streams stop arrivals with bus locations via server-streaming RPC.
+/// Streams stop arrivals based on the current [AppSettings.dataMode].
 ///
-/// Falls back to 15-second polling if the stream fails to connect.
-/// Auto-disposes when the stop detail screen is left, stopping the stream
-/// or polling loop and freeing network/battery resources.
+/// - **Streaming**: Uses server-streaming RPC with auto-retry on connection
+///   errors. Falls back to polling if retries are exhausted.
+/// - **Polling**: Periodic unary RPC at the configured interval.
+///
+/// Auto-disposes when the stop detail screen is left.
 
 final class StopArrivalsProvider
     extends
@@ -31,11 +35,13 @@ final class StopArrivalsProvider
           Stream<StopArrivalsData>
         >
     with $FutureModifier<StopArrivalsData>, $StreamProvider<StopArrivalsData> {
-  /// Streams stop arrivals with bus locations via server-streaming RPC.
+  /// Streams stop arrivals based on the current [AppSettings.dataMode].
   ///
-  /// Falls back to 15-second polling if the stream fails to connect.
-  /// Auto-disposes when the stop detail screen is left, stopping the stream
-  /// or polling loop and freeing network/battery resources.
+  /// - **Streaming**: Uses server-streaming RPC with auto-retry on connection
+  ///   errors. Falls back to polling if retries are exhausted.
+  /// - **Polling**: Periodic unary RPC at the configured interval.
+  ///
+  /// Auto-disposes when the stop detail screen is left.
   StopArrivalsProvider._({
     required StopArrivalsFamily super.from,
     required String super.argument,
@@ -80,13 +86,15 @@ final class StopArrivalsProvider
   }
 }
 
-String _$stopArrivalsHash() => r'e76ac76e7e41049d07652396a0d66db002ad6173';
+String _$stopArrivalsHash() => r'c014d8b533433c6dfdf0075a5b5ce0383b0bf149';
 
-/// Streams stop arrivals with bus locations via server-streaming RPC.
+/// Streams stop arrivals based on the current [AppSettings.dataMode].
 ///
-/// Falls back to 15-second polling if the stream fails to connect.
-/// Auto-disposes when the stop detail screen is left, stopping the stream
-/// or polling loop and freeing network/battery resources.
+/// - **Streaming**: Uses server-streaming RPC with auto-retry on connection
+///   errors. Falls back to polling if retries are exhausted.
+/// - **Polling**: Periodic unary RPC at the configured interval.
+///
+/// Auto-disposes when the stop detail screen is left.
 
 final class StopArrivalsFamily extends $Family
     with $FunctionalFamilyOverride<Stream<StopArrivalsData>, String> {
@@ -99,11 +107,13 @@ final class StopArrivalsFamily extends $Family
         isAutoDispose: true,
       );
 
-  /// Streams stop arrivals with bus locations via server-streaming RPC.
+  /// Streams stop arrivals based on the current [AppSettings.dataMode].
   ///
-  /// Falls back to 15-second polling if the stream fails to connect.
-  /// Auto-disposes when the stop detail screen is left, stopping the stream
-  /// or polling loop and freeing network/battery resources.
+  /// - **Streaming**: Uses server-streaming RPC with auto-retry on connection
+  ///   errors. Falls back to polling if retries are exhausted.
+  /// - **Polling**: Periodic unary RPC at the configured interval.
+  ///
+  /// Auto-disposes when the stop detail screen is left.
 
   StopArrivalsProvider call(String busStopCode) =>
       StopArrivalsProvider._(argument: busStopCode, from: this);

@@ -18,6 +18,8 @@ import '../../../core/error/error_boundary.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/skeleton_loaders.dart';
 import '../../../data/local/favourites_providers.dart';
+import '../../../data/local/settings_providers.dart';
+import '../../../data/local/settings_store.dart';
 import '../../../data/models/favourite.dart';
 import '../../../data/models/models.dart';
 import '../../search/providers/search_providers.dart';
@@ -70,6 +72,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             TextButton(
               onPressed: () => setState(() => _isEditMode = false),
               child: const Text('Done'),
+            ),
+          if (!_isEditMode)
+            Consumer(
+              builder: (context, ref, _) {
+                final settings = ref.watch(appSettingsProvider);
+                final isStreaming = settings.dataMode == DataMode.streaming;
+                return IconButton(
+                  icon: Icon(isStreaming ? Icons.stream : Icons.sync, size: 20),
+                  tooltip: isStreaming ? 'Streaming mode' : 'Polling mode',
+                  onPressed: () => context.push('/settings'),
+                );
+              },
             ),
         ],
       ),
