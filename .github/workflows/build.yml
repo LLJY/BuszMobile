@@ -241,11 +241,63 @@ jobs:
           path: BuszMobile-macOS.zip
 
   # ===========================================================================
+  # Windows EXE
+  # ===========================================================================
+  windows:
+    name: Windows EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Generate .env.json
+        if: env.FRONTLINE_PRIVATE_KEY != ''
+        shell: bash
+        env:
+          FRONTLINE_PRIVATE_KEY: ${{ secrets.FRONTLINE_PRIVATE_KEY }}
+          AUTH_BASE_URL: ${{ secrets.AUTH_BASE_URL }}
+          FRONTLINE_CLIENT_ID: ${{ secrets.FRONTLINE_CLIENT_ID }}
+        run: |
+          jq -n \
+            --arg key "$FRONTLINE_PRIVATE_KEY" \
+            --arg url "$AUTH_BASE_URL" \
+            --arg id  "$FRONTLINE_CLIENT_ID" \
+            '{FRONTLINE_PRIVATE_KEY: ($key | gsub("\n"; "\\n")), AUTH_BASE_URL: $url, FRONTLINE_CLIENT_ID: $id}' \
+            > .env.json
+
+      - name: Build Windows (with credentials)
+        if: hashFiles('.env.json') != ''
+        run: flutter build windows --release --dart-define-from-file=.env.json
+
+      - name: Build Windows (without credentials)
+        if: hashFiles('.env.json') == ''
+        run: flutter build windows --release
+
+      - name: Clean up secrets
+        if: always()
+        shell: bash
+        run: rm -f .env.json
+
+      - name: Zip Windows bundle
+        run: Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath BuszMobile-Windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: BuszMobile-Windows.zip
+
+  # ===========================================================================
   # Publish Release
   # ===========================================================================
   release:
     name: Publish Release
-    needs: [test, android, linux, macos]
+    needs: [test, android, linux, macos, windows]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -262,9 +314,10 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release
-          cp artifacts/android-apk/app-release.apk    release/BuszMobile-Android.apk
-          cp artifacts/linux-appimage/*.AppImage        release/BuszMobile-Linux.AppImage
-          cp artifacts/macos-app/BuszMobile-macOS.zip   release/BuszMobile-macOS.zip
+          cp artifacts/android-apk/app-release.apk      release/BuszMobile-Android.apk
+          cp artifacts/linux-appimage/*.AppImage          release/BuszMobile-Linux.AppImage
+          cp artifacts/macos-app/BuszMobile-macOS.zip     release/BuszMobile-macOS.zip
+          cp artifacts/windows-exe/BuszMobile-Windows.zip release/BuszMobile-Windows.zip
 
       - name: Generate release tag and notes
         id: meta
@@ -291,6 +344,7 @@ jobs:
           | Android | \`BuszMobile-Android.apk\` |
           | Linux | \`BuszMobile-Linux.AppImage\` |
           | macOS | \`BuszMobile-macOS.zip\` |
+          | Windows | \`BuszMobile-Windows.zip\` |
 
           ### Changes
           \`\`\`
@@ -308,4 +362,5 @@ jobs:
             --notes-file release_notes.md \
             release/BuszMobile-Android.apk \
             release/BuszMobile-Linux.AppImage \
-            release/BuszMobile-macOS.zip
+            release/BuszMobile-macOS.zip \
+            release/BuszMobile-Windows.zip
