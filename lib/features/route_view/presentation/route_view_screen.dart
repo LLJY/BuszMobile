@@ -14,6 +14,8 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/error/error_boundary.dart';
+import '../../../core/map/map_tile_layer.dart';
+import '../../../core/map/polyline_parser.dart';
 import '../../../data/models/models.dart';
 import '../providers/route_providers.dart';
 
@@ -24,16 +26,18 @@ import '../providers/route_providers.dart';
 class RouteViewScreen extends ConsumerWidget {
   final String serviceNo;
   final String? highlightStopCode;
+  final int direction;
 
   const RouteViewScreen({
     super.key,
     required this.serviceNo,
     this.highlightStopCode,
+    this.direction = 1,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final routeAsync = ref.watch(serviceRouteProvider(serviceNo));
+    final routeAsync = ref.watch(serviceRouteProvider(serviceNo, direction));
 
     return Scaffold(
       appBar: AppBar(
@@ -61,7 +65,8 @@ class RouteViewScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => ErrorBoundary(
           error: error,
-          onRetry: () => ref.invalidate(serviceRouteProvider(serviceNo)),
+          onRetry: () =>
+              ref.invalidate(serviceRouteProvider(serviceNo, direction)),
         ),
       ),
     );
@@ -120,6 +125,20 @@ class _RouteViewBody extends StatefulWidget {
 class _RouteViewBodyState extends State<_RouteViewBody> {
   final _mapController = MapController();
   bool _hasFitted = false;
+  TileLayer? _cachedTileLayer;
+  List<LatLng>? _polylinePoints;
+
+  @override
+  void initState() {
+    super.initState();
+    cachedTileLayer().then((layer) {
+      if (mounted) setState(() => _cachedTileLayer = layer);
+    });
+    // Parse polyline off the main thread.
+    parsePolyline(widget.data.encodedPolyline).then((points) {
+      if (mounted) setState(() => _polylinePoints = points);
+    });
+  }
 
   @override
   void dispose() {
@@ -138,7 +157,7 @@ class _RouteViewBodyState extends State<_RouteViewBody> {
   @override
   Widget build(BuildContext context) {
     final routeColor = _parseHexColor(widget.data.color);
-    final polylinePoints = _parsePolyline(widget.data.encodedPolyline);
+    final polylinePoints = _polylinePoints ?? const <LatLng>[];
     final stopPoints = widget.data.stops
         .where((s) => s.latitude != 0 && s.longitude != 0)
         .map((s) => LatLng(s.latitude, s.longitude))
@@ -152,7 +171,7 @@ class _RouteViewBodyState extends State<_RouteViewBody> {
         ? allPoints.first
         : const LatLng(1.4927, 103.7414);
 
-    // Fit bounds on first render
+    // Fit bounds on first render (once polyline is parsed)
     if (allPoints.isNotEmpty && !_hasFitted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -176,11 +195,8 @@ class _RouteViewBodyState extends State<_RouteViewBody> {
             },
           ),
           children: [
-            // OSM tile layer
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'dev.floatpoint.busz_mobile',
-            ),
+            // Map tiles (cached CartoDB Voyager)
+            _cachedTileLayer ?? uncachedTileLayer(),
 
             // Route polyline
             if (polylinePoints.isNotEmpty)
@@ -194,7 +210,7 @@ class _RouteViewBodyState extends State<_RouteViewBody> {
                 ],
               ),
 
-            // Stop markers along route
+            // Stop markers along route (small black dots, highlighted = red)
             MarkerLayer(
               markers: widget.data.stops
                   .where((s) => s.latitude != 0 && s.longitude != 0)
@@ -203,12 +219,11 @@ class _RouteViewBodyState extends State<_RouteViewBody> {
                         stop.busStopCode == widget.highlightStopCode;
                     return Marker(
                       point: LatLng(stop.latitude, stop.longitude),
-                      width: isHighlighted ? 36 : 24,
-                      height: isHighlighted ? 36 : 24,
+                      width: isHighlighted ? 36 : 14,
+                      height: isHighlighted ? 36 : 14,
                       child: _StopDot(
                         stopName: stop.busStopName,
                         isHighlighted: isHighlighted,
-                        routeColor: routeColor,
                       ),
                     );
                   })
@@ -245,28 +260,47 @@ class _RouteViewBodyState extends State<_RouteViewBody> {
 class _StopDot extends StatelessWidget {
   final String stopName;
   final bool isHighlighted;
-  final Color routeColor;
 
-  const _StopDot({
-    required this.stopName,
-    required this.isHighlighted,
-    required this.routeColor,
-  });
+  const _StopDot({required this.stopName, required this.isHighlighted});
 
   @override
   Widget build(BuildContext context) {
+    if (isHighlighted) {
+      return Tooltip(
+        message: stopName,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.red,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black38,
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.location_on, color: Colors.white, size: 18),
+        ),
+      );
+    }
+
     return Tooltip(
       message: stopName,
       child: Container(
         decoration: BoxDecoration(
-          color: isHighlighted ? Colors.red : routeColor,
+          color: Colors.black87,
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: isHighlighted ? 3 : 2),
-          boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 3)],
+          border: Border.all(color: Colors.white, width: 2),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 2,
+              offset: Offset(0, 1),
+            ),
+          ],
         ),
-        child: isHighlighted
-            ? const Icon(Icons.location_on, color: Colors.white, size: 18)
-            : null,
       ),
     );
   }
@@ -601,28 +635,4 @@ Color _parseHexColor(String hex) {
     // Fall through to default
   }
   return Colors.grey;
-}
-
-/// Parses a semicolon-separated polyline string into a list of [LatLng].
-///
-/// Backend format: "lat1,lon1;lat2,lon2;..."
-/// Matches [PolylineUtils.DecodePolyline] in MyBusz.Shared.Infrastructure.
-List<LatLng> _parsePolyline(String encoded) {
-  if (encoded.isEmpty) return [];
-
-  final points = <LatLng>[];
-  for (final pair in encoded.split(';')) {
-    final trimmed = pair.trim();
-    if (trimmed.isEmpty) continue;
-    final coords = trimmed.split(',');
-    if (coords.length == 2) {
-      final lat = double.tryParse(coords[0]);
-      final lng = double.tryParse(coords[1]);
-      if (lat != null && lng != null) {
-        points.add(LatLng(lat, lng));
-      }
-    }
-  }
-
-  return points;
 }

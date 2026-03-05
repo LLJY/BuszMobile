@@ -182,7 +182,10 @@ class DemoFrontlineService implements FrontlineServiceBase {
   }
 
   @override
-  Future<ServiceRouteData> getServiceDetails(String serviceNo) async {
+  Future<ServiceRouteData> getServiceDetails(
+    String serviceNo, {
+    int direction = 1,
+  }) async {
     final routeCodes =
         _serviceRoutes[serviceNo] ??
         _stops.map((stop) => stop.code).toList(growable: false);

@@ -9,21 +9,23 @@ library;
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show SchedulerBinding, SchedulerPhase;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/error/error_boundary.dart';
+import '../../../core/map/polyline_parser.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/skeleton_loaders.dart';
 import '../../../data/local/favourites_providers.dart';
 import '../../../data/models/favourite.dart';
 import '../../../data/models/models.dart';
+import '../../route_view/providers/route_providers.dart';
 import '../providers/stop_detail_providers.dart';
 import '../widgets/arrival_tile.dart';
 import '../widgets/bus_map.dart';
-import '../widgets/service_chips_bar.dart';
 
 // =============================================================================
 // Stop Detail Screen
@@ -42,13 +44,6 @@ class StopDetailScreen extends ConsumerWidget {
     this.stopLatitude,
     this.stopLongitude,
   });
-
-  /// Whether the current platform is a desktop-class environment.
-  bool get _isDesktop =>
-      kIsWeb ||
-      defaultTargetPlatform == TargetPlatform.linux ||
-      defaultTargetPlatform == TargetPlatform.macOS ||
-      defaultTargetPlatform == TargetPlatform.windows;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -135,55 +130,30 @@ class StopDetailScreen extends ConsumerWidget {
         tag: 'stop_$busStopCode',
         child: Material(
           color: Theme.of(context).scaffoldBackgroundColor,
-          child: Column(
-            children: [
-              // Service chips bar — only show on desktop
-              if (_isDesktop)
-                ServiceChipsBar(
-                  busStopCode: busStopCode,
-                  selectedService: selectedService,
-                  onServiceTap: (serviceNo) {
-                    final current = ref.read(selectedServiceProvider);
-                    ref
-                        .read(selectedServiceProvider.notifier)
-                        .select(current == serviceNo ? null : serviceNo);
-                  },
-                ),
-
-              // Arrivals content (map + list)
-              Expanded(
-                child: arrivalsAsync.when(
-                  data: (data) => _StopDetailBody(
-                    busStopCode: busStopCode,
-                    data: data,
-                    selectedService: selectedService,
-                    stopLatitude: stopLatitude,
-                    stopLongitude: stopLongitude,
-                    onServiceTap: (serviceNo) {
-                      final current = ref.read(selectedServiceProvider);
-                      ref
-                          .read(selectedServiceProvider.notifier)
-                          .select(current == serviceNo ? null : serviceNo);
-                    },
-                  ),
-                  loading: () => ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    itemCount: 4,
-                    separatorBuilder: (_, _) => const SizedBox(height: 6),
-                    itemBuilder: (context, index) =>
-                        const ArrivalTileSkeleton(),
-                  ),
-                  error: (error, stack) => ErrorBoundary(
-                    error: error,
-                    onRetry: () =>
-                        ref.invalidate(stopArrivalsProvider(busStopCode)),
-                  ),
-                ),
-              ),
-            ],
+          child: arrivalsAsync.when(
+            data: (data) => _StopDetailBody(
+              busStopCode: busStopCode,
+              data: data,
+              selectedService: selectedService,
+              stopLatitude: stopLatitude,
+              stopLongitude: stopLongitude,
+              onServiceTap: (serviceNo) {
+                final current = ref.read(selectedServiceProvider);
+                ref
+                    .read(selectedServiceProvider.notifier)
+                    .select(current == serviceNo ? null : serviceNo);
+              },
+            ),
+            loading: () => ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              itemCount: 4,
+              separatorBuilder: (_, _) => const SizedBox(height: 6),
+              itemBuilder: (context, index) => const ArrivalTileSkeleton(),
+            ),
+            error: (error, stack) => ErrorBoundary(
+              error: error,
+              onRetry: () => ref.invalidate(stopArrivalsProvider(busStopCode)),
+            ),
           ),
         ),
       ),
@@ -192,10 +162,13 @@ class StopDetailScreen extends ConsumerWidget {
 }
 
 // =============================================================================
-// Body: Map + Arrivals List (Draggable Sheet)
+// Body: Map + Arrivals (responsive: sidebar on wide, sheet on narrow)
 // =============================================================================
 
-class _StopDetailBody extends StatefulWidget {
+/// Widescreen breakpoint: above this width, show a sidebar instead of a sheet.
+const double _kWidescreenBreakpoint = 840;
+
+class _StopDetailBody extends ConsumerStatefulWidget {
   final String busStopCode;
   final StopArrivalsData data;
   final String? selectedService;
@@ -213,22 +186,77 @@ class _StopDetailBody extends StatefulWidget {
   });
 
   @override
-  State<_StopDetailBody> createState() => _StopDetailBodyState();
+  ConsumerState<_StopDetailBody> createState() => _StopDetailBodyState();
 }
 
-class _StopDetailBodyState extends State<_StopDetailBody> {
+class _StopDetailBodyState extends ConsumerState<_StopDetailBody> {
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
 
+  // Cached parsed route data — avoids re-parsing on every rebuild.
+  String? _cachedPolylineSource;
+  List<LatLng> _cachedPolylinePoints = const [];
+  Color _cachedPolylineColor = Colors.blue;
+  List<StopOnRoute> _cachedRouteStops = const [];
+
+  /// Monotonically increasing version counter for polyline parse requests.
+  /// Guards against stale futures overwriting newer selections.
+  int _parseVersion = 0;
+
+  /// Current sheet fraction (0–1) for computing map bottom inset.
+  /// Defaults to 0.5 — the snap target when a service is first selected.
+  double _narrowSheetFraction = 0.5;
+
+  @override
+  void initState() {
+    super.initState();
+    _sheetController.addListener(_onSheetFractionChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _StopDetailBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // When a service is newly selected, the sheet will animate to 0.5.
+    // Reset the fraction so the initial map fit uses the correct inset.
+    if (widget.selectedService != null && oldWidget.selectedService == null) {
+      _narrowSheetFraction = 0.5;
+    }
+  }
+
   @override
   void dispose() {
+    _sheetController.removeListener(_onSheetFractionChanged);
     _sheetController.dispose();
     super.dispose();
   }
 
+  /// Track sheet position changes. Only triggers a rebuild on significant
+  /// movements (>15% of screen height) to avoid re-fitting during drags
+  /// while still responding to snap-point transitions (0.18 ↔ 0.5).
+  void _onSheetFractionChanged() {
+    if (!_sheetController.isAttached) return;
+    final size = _sheetController.size;
+    if ((size - _narrowSheetFraction).abs() > 0.15) {
+      _safeSetState(() => _narrowSheetFraction = size);
+    }
+  }
+
+  /// Defer [setState] when called during the build/layout phase
+  /// (e.g. DraggableScrollableSheet.didUpdateWidget → _replaceExtent).
+  void _safeSetState(VoidCallback fn) {
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(fn);
+      });
+    } else {
+      setState(fn);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Show either the selected service buses, or ALL buses for this stop if none selected
+    // Show either the selected service buses, or ALL buses for this stop
     final locations = widget.selectedService != null
         ? widget.data.busLocations
               .where((loc) => loc.serviceNo == widget.selectedService)
@@ -251,52 +279,270 @@ class _StopDetailBodyState extends State<_StopDetailBody> {
         ? LatLng(widget.stopLatitude!, widget.stopLongitude!)
         : null;
 
+    // Determine direction from arrival data for the selected service.
+    final selectedBus = widget.selectedService != null
+        ? widget.data.buses.cast<BusArrivalInfo?>().firstWhere(
+            (bus) => bus!.serviceNo == widget.selectedService,
+            orElse: () => null,
+          )
+        : null;
+    final selectedDirection = selectedBus?.direction ?? 1;
+
+    // Load route data when a service is selected (parse only when data changes)
+    if (widget.selectedService != null) {
+      final routeAsync = ref.watch(
+        serviceRouteProvider(widget.selectedService!, selectedDirection),
+      );
+      routeAsync.whenData((data) {
+        if (data.encodedPolyline != _cachedPolylineSource) {
+          _cachedPolylineSource = data.encodedPolyline;
+          _cachedPolylineColor = AppTheme.parseHexColor(data.color);
+          _cachedRouteStops = data.stops;
+          // Parse polyline off the main thread, then rebuild.
+          // Version guard: ignore results from stale parse requests.
+          final version = ++_parseVersion;
+          parsePolyline(data.encodedPolyline).then((points) {
+            if (mounted && version == _parseVersion) {
+              setState(() => _cachedPolylinePoints = points);
+            }
+          });
+        }
+      });
+    } else if (_cachedPolylineSource != null) {
+      _cachedPolylineSource = null;
+      _cachedPolylinePoints = const [];
+      _cachedPolylineColor = Colors.blue;
+      _cachedRouteStops = const [];
+    }
+
+    final isWide = MediaQuery.sizeOf(context).width >= _kWidescreenBreakpoint;
+
+    // Bottom inset for the map camera: in narrow layout the arrivals sheet
+    // occludes the lower portion, so fitBounds must add extra bottom padding
+    // to keep the route/stops visible above the sheet.
+    final mapBottomInset = (!isWide && widget.selectedService != null)
+        ? _narrowSheetFraction * MediaQuery.sizeOf(context).height
+        : 0.0;
+
+    final map = BusMap(
+      busLocations: locations,
+      stopLocation: stopLocation,
+      plateEtaMinutes: plateEtaMap,
+      polylinePoints: _cachedPolylinePoints,
+      polylineColor: _cachedPolylineColor,
+      routeStops: _cachedRouteStops,
+      currentStopCode: widget.busStopCode,
+      bottomInset: mapBottomInset,
+    );
+
+    if (isWide) {
+      return _WidescreenLayout(
+        busStopCode: widget.busStopCode,
+        data: widget.data,
+        selectedService: widget.selectedService,
+        selectedDirection: selectedDirection,
+        onServiceTap: widget.onServiceTap,
+        map: map,
+      );
+    }
+
+    return _NarrowLayout(
+      sheetController: _sheetController,
+      busStopCode: widget.busStopCode,
+      data: widget.data,
+      selectedService: widget.selectedService,
+      selectedDirection: selectedDirection,
+      onServiceTap: widget.onServiceTap,
+      map: map,
+    );
+  }
+}
+
+// =============================================================================
+// Narrow Layout (mobile): Map + DraggableScrollableSheet overlay
+// =============================================================================
+
+class _NarrowLayout extends StatefulWidget {
+  final DraggableScrollableController sheetController;
+  final String busStopCode;
+  final StopArrivalsData data;
+  final String? selectedService;
+  final int selectedDirection;
+  final ValueChanged<String> onServiceTap;
+  final Widget map;
+
+  const _NarrowLayout({
+    required this.sheetController,
+    required this.busStopCode,
+    required this.data,
+    required this.selectedService,
+    required this.selectedDirection,
+    required this.onServiceTap,
+    required this.map,
+  });
+
+  @override
+  State<_NarrowLayout> createState() => _NarrowLayoutState();
+}
+
+class _NarrowLayoutState extends State<_NarrowLayout> {
+  double _sheetSize = 1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.sheetController.addListener(_onSheetChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.sheetController.removeListener(_onSheetChanged);
+    super.dispose();
+  }
+
+  void _onSheetChanged() {
+    if (!widget.sheetController.isAttached) return;
+    final size = widget.sheetController.size;
+    if ((size - _sheetSize).abs() > 0.01) {
+      _safeSetState(() => _sheetSize = size);
+    }
+  }
+
+  /// Defer [setState] when called during the build/layout phase
+  /// (e.g. DraggableScrollableSheet.didUpdateWidget → _replaceExtent).
+  void _safeSetState(VoidCallback fn) {
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(fn);
+      });
+    } else {
+      setState(fn);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool fabVisible = widget.selectedService != null && _sheetSize > 0.25;
+
     return Stack(
       children: [
-        // Map (background, always full)
-        BusMap(
-          busLocations: locations,
-          stopLocation: stopLocation,
-          plateEtaMinutes: plateEtaMap,
-        ),
+        // Only render the map when a service is selected; otherwise the
+        // arrivals sheet covers the entire screen and the map is wasted work.
+        if (widget.selectedService != null)
+          widget.map
+        else
+          const SizedBox.shrink(),
 
-        // Draggable arrivals sheet
         _ArrivalsSheet(
-          controller: _sheetController,
+          controller: widget.sheetController,
           busStopCode: widget.busStopCode,
           data: widget.data,
           selectedService: widget.selectedService,
           onServiceTap: widget.onServiceTap,
         ),
 
-        // FAB - moved inside Stack for perfect positioning and reactive visibility
-        ListenableBuilder(
-          listenable: _sheetController,
-          builder: (context, _) {
-            final double currentSize = _sheetController.isAttached
-                ? _sheetController.size
-                : 1.0;
+        // FAB for route view
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 200),
+          right: 16,
+          bottom: fabVisible ? 16 : -80,
+          child: FloatingActionButton.small(
+            heroTag: null,
+            tooltip: 'View full route',
+            onPressed: () {
+              context.push(
+                '/route/${widget.selectedService}?highlight=${widget.busStopCode}&dir=${widget.selectedDirection}',
+              );
+            },
+            child: const Icon(Icons.route),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
-            // Hide FAB when at the bottom (minimized) OR when no service is selected
-            final bool visible =
-                widget.selectedService != null && currentSize > 0.25;
+// =============================================================================
+// Widescreen Layout (desktop): Map (left) + Sidebar (right)
+// =============================================================================
 
-            return AnimatedPositioned(
-              duration: const Duration(milliseconds: 200),
-              right: 16,
-              bottom: visible ? 16 : -80, // Slide off screen when hidden
-              child: FloatingActionButton.small(
-                heroTag: null, // Fix: Nested Hero crash
-                tooltip: 'View full route',
-                onPressed: () {
-                  context.push(
-                    '/route/${widget.selectedService}?highlight=${widget.busStopCode}',
-                  );
-                },
-                child: const Icon(Icons.route),
-              ),
-            );
-          },
+class _WidescreenLayout extends StatefulWidget {
+  final String busStopCode;
+  final StopArrivalsData data;
+  final String? selectedService;
+  final int selectedDirection;
+  final ValueChanged<String> onServiceTap;
+  final Widget map;
+
+  const _WidescreenLayout({
+    required this.busStopCode,
+    required this.data,
+    required this.selectedService,
+    required this.selectedDirection,
+    required this.onServiceTap,
+    required this.map,
+  });
+
+  @override
+  State<_WidescreenLayout> createState() => _WidescreenLayoutState();
+}
+
+class _WidescreenLayoutState extends State<_WidescreenLayout> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      children: [
+        // Map takes remaining space
+        Expanded(
+          child: Stack(
+            children: [
+              widget.map,
+
+              // FAB for route view
+              if (widget.selectedService != null)
+                Positioned(
+                  right: 16,
+                  bottom: 16,
+                  child: FloatingActionButton.small(
+                    heroTag: null,
+                    tooltip: 'View full route',
+                    onPressed: () {
+                      context.push(
+                        '/route/${widget.selectedService}?highlight=${widget.busStopCode}&dir=${widget.selectedDirection}',
+                      );
+                    },
+                    child: const Icon(Icons.route),
+                  ),
+                ),
+            ],
+          ),
+        ),
+
+        // Sidebar
+        Container(
+          width: 360,
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            border: Border(left: BorderSide(color: colorScheme.outlineVariant)),
+          ),
+          child: _ArrivalsList(
+            busStopCode: widget.busStopCode,
+            data: widget.data,
+            selectedService: widget.selectedService,
+            onServiceTap: widget.onServiceTap,
+            scrollController: _scrollController,
+          ),
         ),
       ],
     );
@@ -328,8 +574,8 @@ class _ArrivalsSheet extends StatefulWidget {
 
 class _ArrivalsSheetState extends State<_ArrivalsSheet> {
   bool _isUnselecting = false;
-  // This state allows us to "pause" the sheet at 50% while scrolling the list
   bool _isHoldingAtMid = false;
+  double _currentSize = 1.0;
 
   @override
   void initState() {
@@ -343,20 +589,37 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
     super.dispose();
   }
 
+  /// Defer [setState] when called during the build/layout phase
+  /// (e.g. DraggableScrollableSheet.didUpdateWidget → _replaceExtent).
+  void _safeSetState(VoidCallback fn) {
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(fn);
+      });
+    } else {
+      setState(fn);
+    }
+  }
+
   void _onScroll() {
     if (_isUnselecting || !widget.controller.isAttached) return;
 
     final size = widget.controller.size;
 
-    // Requirement: "snap to 50%... allow for scrolling of the main list without moving the bottomsheet"
-    // If the sheet hits exactly 50% (via drag or snap), we enable the "holding" state.
+    // Track current size for UI (corner radius, fullscreen, minimized)
+    if ((size - _currentSize).abs() > 0.01) {
+      _safeSetState(() => _currentSize = size);
+    }
+
+    // If the sheet hits 50%, enable the "holding" state.
     if (size >= 0.49 && size <= 0.51 && !_isHoldingAtMid) {
-      setState(() => _isHoldingAtMid = true);
+      _safeSetState(() => _isHoldingAtMid = true);
     }
 
     // Release the hold if we move significantly away from 50%
     if ((size < 0.45 || size > 0.55) && _isHoldingAtMid) {
-      setState(() => _isHoldingAtMid = false);
+      _safeSetState(() => _isHoldingAtMid = false);
     }
 
     // Unselect logic: If dragged to the very top (1.0), dismiss map/selection.
@@ -398,111 +661,98 @@ class _ArrivalsSheetState extends State<_ArrivalsSheet> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final bool isFullscreen = _currentSize >= 0.95;
+    final double cornerRadius = isFullscreen ? 0 : 20;
 
-    return ListenableBuilder(
-      listenable: widget.controller,
-      builder: (context, child) {
-        final double currentSize = widget.controller.isAttached
-            ? widget.controller.size
-            : 1.0;
-        final bool isFullscreen = currentSize >= 0.95;
-        final double cornerRadius = isFullscreen ? 0 : 20;
+    // Mid-point Scroll Lock:
+    // Set maxChildSize to 0.5 so the list scrolls internally at mid-point.
+    final double maxChildSize =
+        (widget.selectedService != null && _isHoldingAtMid) ? 0.5 : 1.0;
 
-        // Implementation of the "Mid-point Scroll Lock":
-        // We set maxChildSize to 0.5 when we want the list to scroll internally.
-        final double maxChildSize =
-            (widget.selectedService != null && _isHoldingAtMid) ? 0.5 : 1.0;
+    const double minChildSize = 0.18;
+    final double initialChildSize = maxChildSize;
 
-        const double minChildSize = 0.18;
-        // Must satisfy initialChildSize <= maxChildSize on every rebuild.
-        // The controller manages the actual position after the first build.
-        final double initialChildSize = maxChildSize;
-
-        return DraggableScrollableSheet(
-          controller: widget.controller,
-          initialChildSize: initialChildSize,
-          minChildSize: minChildSize,
-          maxChildSize: maxChildSize,
-          snap: true,
-          snapSizes: const [0.18, 0.5],
-          builder: (context, scrollController) {
-            return NotificationListener<ScrollNotification>(
-              onNotification: (notification) {
-                // When held at 50% and the user has scrolled to the
-                // bottom of the list, unlock maxChildSize and animate
-                // the sheet to fullscreen so the map is covered.
-                if (notification is ScrollEndNotification && _isHoldingAtMid) {
-                  final metrics = notification.metrics;
-                  if (metrics.maxScrollExtent > 0 &&
-                      metrics.pixels >= metrics.maxScrollExtent) {
-                    setState(() => _isHoldingAtMid = false);
-                    // Wait for rebuild (maxChildSize → 1.0) then animate.
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (widget.controller.isAttached) {
-                        widget.controller.animateTo(
-                          1.0,
-                          duration: const Duration(milliseconds: 400),
-                          curve: Curves.easeOutCubic,
-                        );
-                      }
-                    });
+    return DraggableScrollableSheet(
+      controller: widget.controller,
+      initialChildSize: initialChildSize,
+      minChildSize: minChildSize,
+      maxChildSize: maxChildSize,
+      snap: true,
+      snapSizes: const [0.18, 0.5],
+      builder: (context, scrollController) {
+        return NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            // When held at 50% and the user scrolled to the bottom,
+            // unlock maxChildSize and animate to fullscreen.
+            if (notification is ScrollEndNotification && _isHoldingAtMid) {
+              final metrics = notification.metrics;
+              if (metrics.maxScrollExtent > 0 &&
+                  metrics.pixels >= metrics.maxScrollExtent) {
+                setState(() => _isHoldingAtMid = false);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (widget.controller.isAttached) {
+                    widget.controller.animateTo(
+                      1.0,
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeOutCubic,
+                    );
                   }
-                }
-                return false;
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(cornerRadius),
-                  ),
-                  boxShadow: isFullscreen
-                      ? null
-                      : [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
-                            blurRadius: 10,
-                            offset: const Offset(0, -2),
-                          ),
-                        ],
-                ),
-                child: Column(
-                  children: [
-                    // Drag handle indicator (cosmetic)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.only(top: 12, bottom: 20),
-                      child: Opacity(
-                        opacity: isFullscreen ? 0 : 1,
-                        child: Center(
-                          child: Container(
-                            width: 36,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: colorScheme.outlineVariant,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
+                });
+              }
+            }
+            return false;
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(cornerRadius),
+              ),
+              boxShadow: isFullscreen
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, -2),
+                      ),
+                    ],
+            ),
+            child: Column(
+              children: [
+                // Drag handle
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.only(top: 12, bottom: 20),
+                  child: Opacity(
+                    opacity: isFullscreen ? 0 : 1,
+                    child: Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: colorScheme.outlineVariant,
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
                     ),
-
-                    // Arrivals List
-                    Expanded(
-                      child: _ArrivalsList(
-                        busStopCode: widget.busStopCode,
-                        data: widget.data,
-                        selectedService: widget.selectedService,
-                        onServiceTap: widget.onServiceTap,
-                        scrollController: scrollController,
-                        isMinimized: currentSize <= 0.2,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            );
-          },
+
+                // Arrivals List
+                Expanded(
+                  child: _ArrivalsList(
+                    busStopCode: widget.busStopCode,
+                    data: widget.data,
+                    selectedService: widget.selectedService,
+                    onServiceTap: widget.onServiceTap,
+                    scrollController: scrollController,
+                    isMinimized: _currentSize <= 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );

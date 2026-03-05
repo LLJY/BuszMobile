@@ -10,7 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:busz_mobile/data/models/models.dart';
-import 'package:busz_mobile/data/services/frontline_service.dart';
+import 'package:busz_mobile/data/services/frontline_service_base.dart';
 import 'package:busz_mobile/features/search/providers/search_providers.dart';
 import 'package:busz_mobile/features/stop_detail/providers/stop_detail_providers.dart';
 
@@ -18,7 +18,7 @@ import 'package:busz_mobile/features/stop_detail/providers/stop_detail_providers
 // Manual Mock
 // =============================================================================
 
-class MockFrontlineService implements FrontlineService {
+class MockFrontlineService implements FrontlineServiceBase {
   StopArrivalsData? arrivalsData;
   int arrivalsCallCount = 0;
   int streamCallCount = 0;
@@ -60,7 +60,10 @@ class MockFrontlineService implements FrontlineService {
   }
 
   @override
-  Future<ServiceRouteData> getServiceDetails(String serviceNo) async {
+  Future<ServiceRouteData> getServiceDetails(
+    String serviceNo, {
+    int direction = 1,
+  }) async {
     throw UnimplementedError('Not used in stop detail tests');
   }
 

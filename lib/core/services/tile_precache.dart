@@ -1,11 +1,17 @@
-/// Utilities to precache OpenStreetMap tiles for favourite locations.
+/// Utilities to precache map tiles for favourite locations.
+///
+/// Downloads CartoDB Voyager tiles ahead of time into the same
+/// [CacheStore] used by [CachedTileProvider], so they are served
+/// from disk when [flutter_map_cache] requests them later.
 library;
 
-import 'dart:io';
 import 'dart:math';
 
+import 'package:dio/dio.dart';
+import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
+
+import '../map/map_tile_layer.dart' show getMapCacheStore, precacheTileUrlBase;
 
 class TilePrecache {
   static const List<int> _zoomLevels = <int>[13, 14, 15, 16];
@@ -16,12 +22,26 @@ class TilePrecache {
   ) async {
     if (kIsWeb || locations.isEmpty) return;
 
-    final cacheDir = await getApplicationCacheDirectory();
-    final tilesRoot = Directory('${cacheDir.path}/tiles');
-    await tilesRoot.create(recursive: true);
+    // Use the same CacheStore as the map tile provider so precached
+    // responses are found by CachedTileProvider at render time.
+    final store = await getMapCacheStore();
+    final dio = Dio()
+      ..options.headers['User-Agent'] = _userAgent
+      ..options.responseType = ResponseType.bytes
+      ..options.connectTimeout = const Duration(seconds: 10)
+      ..options.receiveTimeout = const Duration(seconds: 10);
 
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 10);
+    dio.interceptors.add(
+      DioCacheInterceptor(
+        options: CacheOptions(
+          store: store,
+          policy: CachePolicy.forceCache,
+          maxStale: const Duration(days: 30),
+          hitCacheOnNetworkFailure: true,
+        ),
+      ),
+    );
+
     try {
       for (final location in locations) {
         for (final zoom in _zoomLevels) {
@@ -34,17 +54,23 @@ class TilePrecache {
 
               if (!_isValidTile(x, y, zoom)) continue;
 
-              final tileFile = File('${tilesRoot.path}/$zoom/$x/$y.png');
-              if (await tileFile.exists()) continue;
+              // Use the same URL pattern as flutter_map's TileLayer with
+              // retina (@2x) suffix, matching CachedTileProvider requests.
+              final url = '$precacheTileUrlBase/$zoom/$x/$y@2x.png';
 
-              await tileFile.parent.create(recursive: true);
-              await _downloadTile(client, zoom, x, y, tileFile);
+              try {
+                await dio.get<void>(url);
+              } catch (e) {
+                debugPrint(
+                  '[TilePrecache] Failed to download tile $zoom/$x/$y: $e',
+                );
+              }
             }
           }
         }
       }
     } finally {
-      client.close(force: true);
+      dio.close();
     }
   }
 
@@ -66,33 +92,5 @@ class TilePrecache {
   static bool _isValidTile(int x, int y, int zoom) {
     final n = 1 << zoom;
     return x >= 0 && y >= 0 && x < n && y < n;
-  }
-
-  static Future<void> _downloadTile(
-    HttpClient client,
-    int zoom,
-    int x,
-    int y,
-    File target,
-  ) async {
-    final uri = Uri.parse('https://tile.openstreetmap.org/$zoom/$x/$y.png');
-
-    try {
-      final request = await client.getUrl(uri);
-      request.headers.set(HttpHeaders.userAgentHeader, _userAgent);
-
-      final response = await request.close();
-      if (response.statusCode != HttpStatus.ok) {
-        await response.drain<void>();
-        return;
-      }
-
-      final bytes = await response.fold<List<int>>(<int>[], (buffer, chunk) {
-        buffer.addAll(chunk);
-        return buffer;
-      });
-
-      await target.writeAsBytes(bytes, flush: true);
-    } catch (_) {}
   }
 }

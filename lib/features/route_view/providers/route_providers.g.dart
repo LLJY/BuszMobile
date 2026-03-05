@@ -8,15 +8,17 @@ part of 'route_providers.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Fetches full route details for a bus service.
+/// Fetches full route details for a bus service in a given direction.
 ///
+/// [direction] 1 or 2, matching the backend route direction.
 /// Auto-disposes when the route view screen is left.
 
 @ProviderFor(serviceRoute)
 final serviceRouteProvider = ServiceRouteFamily._();
 
-/// Fetches full route details for a bus service.
+/// Fetches full route details for a bus service in a given direction.
 ///
+/// [direction] 1 or 2, matching the backend route direction.
 /// Auto-disposes when the route view screen is left.
 
 final class ServiceRouteProvider
@@ -27,12 +29,13 @@ final class ServiceRouteProvider
           FutureOr<ServiceRouteData>
         >
     with $FutureModifier<ServiceRouteData>, $FutureProvider<ServiceRouteData> {
-  /// Fetches full route details for a bus service.
+  /// Fetches full route details for a bus service in a given direction.
   ///
+  /// [direction] 1 or 2, matching the backend route direction.
   /// Auto-disposes when the route view screen is left.
   ServiceRouteProvider._({
     required ServiceRouteFamily super.from,
-    required String super.argument,
+    required (String, int) super.argument,
   }) : super(
          retry: null,
          name: r'serviceRouteProvider',
@@ -48,7 +51,7 @@ final class ServiceRouteProvider
   String toString() {
     return r'serviceRouteProvider'
         ''
-        '($argument)';
+        '$argument';
   }
 
   @$internal
@@ -59,8 +62,8 @@ final class ServiceRouteProvider
 
   @override
   FutureOr<ServiceRouteData> create(Ref ref) {
-    final argument = this.argument as String;
-    return serviceRoute(ref, argument);
+    final argument = this.argument as (String, int);
+    return serviceRoute(ref, argument.$1, argument.$2);
   }
 
   @override
@@ -74,14 +77,15 @@ final class ServiceRouteProvider
   }
 }
 
-String _$serviceRouteHash() => r'ceffcb62ebb7b8b32b6d48f7e1488a92c44acde7';
+String _$serviceRouteHash() => r'2e2011e00be71102a4fe1a494934b34477dffd3c';
 
-/// Fetches full route details for a bus service.
+/// Fetches full route details for a bus service in a given direction.
 ///
+/// [direction] 1 or 2, matching the backend route direction.
 /// Auto-disposes when the route view screen is left.
 
 final class ServiceRouteFamily extends $Family
-    with $FunctionalFamilyOverride<FutureOr<ServiceRouteData>, String> {
+    with $FunctionalFamilyOverride<FutureOr<ServiceRouteData>, (String, int)> {
   ServiceRouteFamily._()
     : super(
         retry: null,
@@ -91,12 +95,13 @@ final class ServiceRouteFamily extends $Family
         isAutoDispose: true,
       );
 
-  /// Fetches full route details for a bus service.
+  /// Fetches full route details for a bus service in a given direction.
   ///
+  /// [direction] 1 or 2, matching the backend route direction.
   /// Auto-disposes when the route view screen is left.
 
-  ServiceRouteProvider call(String serviceNo) =>
-      ServiceRouteProvider._(argument: serviceNo, from: this);
+  ServiceRouteProvider call(String serviceNo, int direction) =>
+      ServiceRouteProvider._(argument: (serviceNo, direction), from: this);
 
   @override
   String toString() => r'serviceRouteProvider';

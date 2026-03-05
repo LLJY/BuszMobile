@@ -5,8 +5,6 @@
 library;
 
 import 'dart:io' show File, Platform;
-import 'dart:ui';
-
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,29 +38,8 @@ class BuszMobileApp extends StatelessWidget {
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       routerConfig: appRouter,
-      scrollBehavior: _isDesktop ? const AppScrollBehavior() : null,
     );
   }
-}
-
-// =============================================================================
-// Custom Scroll Behavior (Enable mouse dragging on Desktop)
-// =============================================================================
-
-/// Custom scroll behavior that enables dragging with mouse and trackpad.
-///
-/// This makes mobile-first UI components like [DraggableScrollableSheet]
-/// draggable with a mouse on Desktop/Web platforms.
-class AppScrollBehavior extends MaterialScrollBehavior {
-  const AppScrollBehavior();
-
-  @override
-  Set<PointerDeviceKind> get dragDevices => {
-    PointerDeviceKind.touch,
-    PointerDeviceKind.mouse,
-    PointerDeviceKind.trackpad,
-    PointerDeviceKind.stylus,
-  };
 }
 
 // =============================================================================

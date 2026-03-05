@@ -278,9 +278,14 @@ class FrontlineService implements FrontlineServiceBase {
   /// [serviceNo] - The bus service number (e.g. "J10")
   /// Returns route polyline, stop sequence, origin/destination.
   @override
-  Future<ServiceRouteData> getServiceDetails(String serviceNo) async {
+  Future<ServiceRouteData> getServiceDetails(
+    String serviceNo, {
+    int direction = 1,
+  }) async {
     final client = _getClient();
-    final request = pb.GetServiceDetailsRequest()..serviceNo = serviceNo;
+    final request = pb.GetServiceDetailsRequest()
+      ..serviceNo = serviceNo
+      ..direction = direction;
     final headers = await _getAuthHeaders();
 
     late final pb.GetServiceDetailsResponse response;

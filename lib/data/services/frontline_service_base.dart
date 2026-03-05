@@ -26,7 +26,10 @@ abstract class FrontlineServiceBase {
     int limit = 10,
   });
 
-  Future<ServiceRouteData> getServiceDetails(String serviceNo);
+  Future<ServiceRouteData> getServiceDetails(
+    String serviceNo, {
+    int direction = 1,
+  });
 
   Future<List<ServiceSummary>> getServicesAtStop(String busStopCode);
 

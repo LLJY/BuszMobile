@@ -194,7 +194,7 @@ class ServiceRouteData {
   /// Name of the destination stop.
   final String destination;
 
-  /// Google-encoded polyline string for the route shape.
+  /// Semicolon-separated `"lat,lon;lat,lon;..."` polyline for the route shape.
   final String encodedPolyline;
 
   /// Ordered list of stops along this route direction.

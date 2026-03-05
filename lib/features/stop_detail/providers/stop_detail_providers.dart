@@ -31,6 +31,13 @@ const _maxBackoff = Duration(seconds: 30);
 /// Maximum consecutive retries before surfacing the error.
 const _maxRetries = 5;
 
+/// Delay before reconnecting after a clean stream end (server closed normally).
+const _cleanEndDelay = Duration(seconds: 2);
+
+/// Maximum consecutive clean-end reconnects before falling back to polling.
+/// Prevents tight reconnect loops if the server keeps closing immediately.
+const _maxCleanEnds = 10;
+
 // =============================================================================
 // Stop Arrivals Provider
 // =============================================================================
@@ -116,15 +123,22 @@ Stream<T> _streamWithRetry<T>({
   required Duration fallbackInterval,
 }) async* {
   var retries = 0;
+  var cleanEnds = 0;
 
-  while (retries < _maxRetries) {
+  while (retries < _maxRetries && cleanEnds < _maxCleanEnds) {
     try {
       await for (final data in stream()) {
         retries = 0; // Reset on success
+        cleanEnds = 0;
         yield data;
       }
-      // Stream ended cleanly (server closed) — reconnect immediately
-      debugPrint('[StopArrivals] Stream ended, reconnecting...');
+      // Stream ended cleanly (server closed) — wait before reconnecting.
+      cleanEnds++;
+      debugPrint(
+        '[StopArrivals] Stream ended cleanly ($cleanEnds/$_maxCleanEnds), '
+        'reconnecting in ${_cleanEndDelay.inSeconds}s...',
+      );
+      await Future<void>.delayed(_cleanEndDelay);
     } catch (e) {
       retries++;
       final backoff = _exponentialBackoff(retries);

@@ -45,12 +45,15 @@ final appRouter = GoRouter(
       path: '/route/:serviceNo',
       pageBuilder: (context, state) {
         final serviceNo = state.pathParameters['serviceNo']!;
-        final highlightStop = state.uri.queryParameters['highlight'];
+        final params = state.uri.queryParameters;
+        final highlightStop = params['highlight'];
+        final direction = (int.tryParse(params['dir'] ?? '') ?? 1).clamp(1, 2);
         return _fadeSlidePage(
           state: state,
           child: RouteViewScreen(
             serviceNo: serviceNo,
             highlightStopCode: highlightStop,
+            direction: direction,
           ),
         );
       },

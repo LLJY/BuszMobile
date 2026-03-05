@@ -1,8 +1,11 @@
 /// Bus map widget showing live GPS positions on OpenStreetMap.
 ///
 /// Uses flutter_map + latlong2 for OSM tile rendering.
-/// Shows bus markers with service number labels and heading arrows.
-/// Shows the bus stop itself with a red marker.
+/// Displays:
+/// - Route polyline (when a service is selected)
+/// - Route stops as small black dots with white outline
+/// - Current stop emphasized with a red marker
+/// - Bus markers with service labels and heading arrows
 library;
 
 import 'dart:math' as math;
@@ -11,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/map/map_tile_layer.dart';
 import '../../../data/models/models.dart';
 
 // =============================================================================
@@ -31,12 +35,35 @@ class BusMap extends StatefulWidget {
   /// arrival data). Used instead of the unpopulated etaToNextStopMinutes.
   final Map<String, int> plateEtaMinutes;
 
+  /// Route polyline points (semicolon-separated format, pre-parsed).
+  /// Shown when a service is selected.
+  final List<LatLng> polylinePoints;
+
+  /// Color for the route polyline.
+  final Color polylineColor;
+
+  /// All stops along the route, shown as small dots.
+  final List<StopOnRoute> routeStops;
+
+  /// Bus stop code of the currently viewed stop (for emphasis).
+  final String? currentStopCode;
+
+  /// Extra bottom padding (logical pixels) to account for occluding UI
+  /// elements like a bottom sheet. Applied when fitting camera bounds so
+  /// the route/stops remain visible above the sheet.
+  final double bottomInset;
+
   const BusMap({
     super.key,
     required this.busLocations,
     this.stopLocation,
     this.stopName,
     this.plateEtaMinutes = const {},
+    this.polylinePoints = const [],
+    this.polylineColor = Colors.blue,
+    this.routeStops = const [],
+    this.currentStopCode,
+    this.bottomInset = 0,
   });
 
   @override
@@ -46,6 +73,15 @@ class BusMap extends StatefulWidget {
 class _BusMapState extends State<BusMap> {
   final _mapController = MapController();
   bool _hasFitted = false;
+  TileLayer? _cachedTileLayer;
+
+  @override
+  void initState() {
+    super.initState();
+    cachedTileLayer().then((layer) {
+      if (mounted) setState(() => _cachedTileLayer = layer);
+    });
+  }
 
   @override
   void dispose() {
@@ -56,30 +92,80 @@ class _BusMapState extends State<BusMap> {
   @override
   void didUpdateWidget(BusMap oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Re-fit bounds when locations change significantly
-    if (widget.busLocations.length != oldWidget.busLocations.length) {
+    // Re-fit bounds when locations change significantly or content differs
+    if (widget.busLocations.length != oldWidget.busLocations.length ||
+        widget.polylinePoints.length != oldWidget.polylinePoints.length ||
+        widget.currentStopCode != oldWidget.currentStopCode ||
+        widget.stopLocation != oldWidget.stopLocation ||
+        _polylineEndpointsChanged(oldWidget) ||
+        (widget.bottomInset - oldWidget.bottomInset).abs() > 20) {
       _hasFitted = false;
     }
   }
 
+  /// Check if polyline endpoints changed (same length but different route).
+  bool _polylineEndpointsChanged(BusMap oldWidget) {
+    if (widget.polylinePoints.isEmpty || oldWidget.polylinePoints.isEmpty) {
+      return false;
+    }
+    return widget.polylinePoints.first != oldWidget.polylinePoints.first ||
+        widget.polylinePoints.last != oldWidget.polylinePoints.last;
+  }
+
+  /// Returns positions of route stops within ±5 of the current stop.
+  List<LatLng> _nearbyRouteStopPoints() {
+    if (widget.routeStops.isEmpty || widget.currentStopCode == null) return [];
+    final idx = widget.routeStops.indexWhere(
+      (s) => s.busStopCode == widget.currentStopCode,
+    );
+    if (idx == -1) return [];
+    final start = (idx - 5).clamp(0, widget.routeStops.length);
+    final end = (idx + 6).clamp(0, widget.routeStops.length); // exclusive
+    return widget.routeStops
+        .sublist(start, end)
+        .where((s) => s.latitude != 0 && s.longitude != 0)
+        .map((s) => LatLng(s.latitude, s.longitude))
+        .toList();
+  }
+
   void _fitBounds(List<LatLng> points) {
     if (points.isEmpty) return;
+
+    final padding = EdgeInsets.fromLTRB(50, 50, 50, 50 + widget.bottomInset);
+
     if (points.length == 1) {
-      _mapController.move(points.first, 15);
+      // Single point: create a small bounding box so fitCamera can
+      // apply asymmetric padding (shifting the visible center upward).
+      final p = points.first;
+      const d = 0.002; // ~220 m
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: LatLngBounds(
+            LatLng(p.latitude - d, p.longitude - d),
+            LatLng(p.latitude + d, p.longitude + d),
+          ),
+          padding: padding,
+          maxZoom: 15,
+        ),
+      );
     } else {
       final bounds = LatLngBounds.fromPoints(points);
       _mapController.fitCamera(
-        CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
+        CameraFit.bounds(bounds: bounds, padding: padding),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Calculate bounds to fit all markers
+    // Collect points for bounds fitting: current stop ±5 stops + buses.
+    // The full polyline is still drawn but the camera focuses on the
+    // immediate neighbourhood rather than the entire route.
+    final nearbyStopPoints = _nearbyRouteStopPoints();
     final points = <LatLng>[
       if (widget.stopLocation != null) widget.stopLocation!,
       ...widget.busLocations.map((loc) => LatLng(loc.latitude, loc.longitude)),
+      ...nearbyStopPoints,
     ];
 
     // Default center: Johor Bahru if no points
@@ -106,21 +192,54 @@ class _BusMapState extends State<BusMap> {
         },
       ),
       children: [
-        // OSM tile layer
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'dev.floatpoint.busz_mobile',
-        ),
+        // Map tiles (cached CartoDB Voyager)
+        _cachedTileLayer ?? uncachedTileLayer(),
 
-        // Bus stop marker
+        // Route polyline
+        if (widget.polylinePoints.isNotEmpty)
+          PolylineLayer(
+            polylines: [
+              Polyline(
+                points: widget.polylinePoints,
+                strokeWidth: 4.0,
+                color: widget.polylineColor,
+              ),
+            ],
+          ),
+
+        // Route stop markers (small black dots, skip current — pin below)
+        if (widget.routeStops.isNotEmpty)
+          MarkerLayer(
+            markers: widget.routeStops
+                .where(
+                  (s) =>
+                      s.latitude != 0 &&
+                      s.longitude != 0 &&
+                      s.busStopCode != widget.currentStopCode,
+                )
+                .map(
+                  (stop) => Marker(
+                    point: LatLng(stop.latitude, stop.longitude),
+                    width: 14,
+                    height: 14,
+                    child: Tooltip(
+                      message: stop.busStopName,
+                      child: const _RouteStopDot(),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+
+        // Current stop marker — always shown when location is known
         if (widget.stopLocation != null)
           MarkerLayer(
             markers: [
               Marker(
                 point: widget.stopLocation!,
-                width: 40,
-                height: 40,
-                child: const _StopMarker(),
+                width: 36,
+                height: 36,
+                child: const _CurrentStopMarker(),
               ),
             ],
           ),
@@ -131,8 +250,8 @@ class _BusMapState extends State<BusMap> {
             final etaMinutes = widget.plateEtaMinutes[loc.plateNo];
             return Marker(
               point: LatLng(loc.latitude, loc.longitude),
-              width: 90,
-              height: 56,
+              width: 100,
+              height: 64,
               child: _BusMarker(location: loc, etaMinutesToStop: etaMinutes),
             );
           }).toList(),
@@ -143,11 +262,33 @@ class _BusMapState extends State<BusMap> {
 }
 
 // =============================================================================
-// Stop Marker
+// Route Stop Dot (small black dot with white outline)
 // =============================================================================
 
-class _StopMarker extends StatelessWidget {
-  const _StopMarker();
+class _RouteStopDot extends StatelessWidget {
+  const _RouteStopDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black87,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(0, 1)),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Current Stop Marker (emphasized)
+// =============================================================================
+
+class _CurrentStopMarker extends StatelessWidget {
+  const _CurrentStopMarker();
 
   @override
   Widget build(BuildContext context) {
@@ -160,7 +301,7 @@ class _StopMarker extends StatelessWidget {
           BoxShadow(color: Colors.black38, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
-      child: const Icon(Icons.directions_bus, color: Colors.white, size: 20),
+      child: const Icon(Icons.location_on, color: Colors.white, size: 18),
     );
   }
 }
@@ -232,14 +373,14 @@ class _BusMarker extends StatelessWidget {
             child: const Icon(
               Icons.navigation,
               color: Colors.blue,
-              size: 22,
-              shadows: [Shadow(color: Colors.black54, blurRadius: 3)],
+              size: 32,
+              shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
             ),
           )
         else
           Container(
-            width: 16,
-            height: 16,
+            width: 20,
+            height: 20,
             decoration: BoxDecoration(
               color: Colors.blue,
               shape: BoxShape.circle,

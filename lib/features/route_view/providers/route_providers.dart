@@ -14,11 +14,16 @@ part 'route_providers.g.dart';
 // Service Route Provider
 // =============================================================================
 
-/// Fetches full route details for a bus service.
+/// Fetches full route details for a bus service in a given direction.
 ///
+/// [direction] 1 or 2, matching the backend route direction.
 /// Auto-disposes when the route view screen is left.
 @riverpod
-Future<ServiceRouteData> serviceRoute(Ref ref, String serviceNo) async {
+Future<ServiceRouteData> serviceRoute(
+  Ref ref,
+  String serviceNo,
+  int direction,
+) async {
   final service = ref.watch(frontlineServiceProvider);
-  return service.getServiceDetails(serviceNo);
+  return service.getServiceDetails(serviceNo, direction: direction);
 }

@@ -29,6 +29,11 @@ dependencies:
   # Map
   flutter_map: ^8.2.2
   latlong2: ^0.9.1
+  flutter_map_cache: ^2.0.0
+  http_cache_core: ^1.1.0
+  http_cache_file_store: ^2.0.0
+  dio: ^5.2.0
+  dio_cache_interceptor: ^4.0.5
 
   # UI
   cupertino_icons: ^1.0.8
