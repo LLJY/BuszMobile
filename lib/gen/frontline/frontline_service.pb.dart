@@ -237,7 +237,6 @@ class BusArrival extends $pb.GeneratedMessage {
     ..a<$core.int>(14, _omitFieldNames ? '' : 'direction', $pb.PbFieldType.O3)
     ..aOB(15, _omitFieldNames ? '' : 'isDeparting')
     ..aOS(16, _omitFieldNames ? '' : 'laterPlateNo')
-    ..e<$1.PunctualityStatus>(17, _omitFieldNames ? '' : 'punctualityStatus', $pb.PbFieldType.OE, defaultOrMaker: $1.PunctualityStatus.PUNCTUALITY_STATUS_UNSPECIFIED, valueOf: $1.PunctualityStatus.valueOf, enumValues: $1.PunctualityStatus.values)
     ..hasRequiredFields = false
   ;
 
@@ -413,15 +412,6 @@ class BusArrival extends $pb.GeneratedMessage {
   $core.bool hasLaterPlateNo() => $_has(15);
   @$pb.TagNumber(16)
   void clearLaterPlateNo() => clearField(16);
-
-  @$pb.TagNumber(17)
-  $1.PunctualityStatus get punctualityStatus => $_getN(16);
-  @$pb.TagNumber(17)
-  set punctualityStatus($1.PunctualityStatus v) { setField(17, v); }
-  @$pb.TagNumber(17)
-  $core.bool hasPunctualityStatus() => $_has(16);
-  @$pb.TagNumber(17)
-  void clearPunctualityStatus() => clearField(17);
 }
 
 class StreamStopArrivalsRequest extends $pb.GeneratedMessage {

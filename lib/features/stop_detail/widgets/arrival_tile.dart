@@ -177,9 +177,13 @@ class _MetadataRow extends StatelessWidget {
 
     // Delay status
     final delayLabel = switch (arrival.delayStatus) {
-      'DELAY_STATUS_ON_TIME' => 'ON TIME',
+      'DELAY_STATUS_ON_TIME' =>
+        arrival.delayMinutes != 0
+            ? 'ON TIME ${arrival.delayMinutes > 0 ? '+' : ''}${arrival.delayMinutes}m'
+            : 'ON TIME',
       'DELAY_STATUS_SLIGHT_DELAY' => 'LATE +${arrival.delayMinutes}m',
       'DELAY_STATUS_HEAVY_DELAY' => 'HEAVY +${arrival.delayMinutes}m',
+      'DELAY_STATUS_EARLY' => 'EARLY ${arrival.delayMinutes}m',
       _ => '',
     };
     if (delayLabel.isNotEmpty) {
@@ -187,6 +191,7 @@ class _MetadataRow extends StatelessWidget {
         'DELAY_STATUS_ON_TIME' => Colors.green,
         'DELAY_STATUS_SLIGHT_DELAY' => Colors.orange,
         'DELAY_STATUS_HEAVY_DELAY' => Colors.red,
+        'DELAY_STATUS_EARLY' => Colors.blue,
         _ => colorScheme.onSurfaceVariant,
       };
       parts.add(_tag(delayLabel, delayColor));

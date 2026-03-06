@@ -128,7 +128,6 @@ const BusArrival$json = {
     {'1': 'scheduled_time', '3': 13, '4': 1, '5': 11, '6': '.google.protobuf.Timestamp', '10': 'scheduledTime'},
     {'1': 'is_departing', '3': 15, '4': 1, '5': 8, '10': 'isDeparting'},
     {'1': 'later_plate_no', '3': 16, '4': 1, '5': 9, '10': 'laterPlateNo'},
-    {'1': 'punctuality_status', '3': 17, '4': 1, '5': 14, '6': '.mybusz.common.PunctualityStatus', '10': 'punctualityStatus'},
   ],
 };
 
@@ -147,8 +146,7 @@ final $typed_data.Uint8List busArrivalDescriptor = $convert.base64Decode(
     'MhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcFINbGFzdEdwc1VwZGF0ZRJBCg5zY2hlZHVsZW'
     'RfdGltZRgNIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBSDXNjaGVkdWxlZFRpbWUS'
     'IQoMaXNfZGVwYXJ0aW5nGA8gASgIUgtpc0RlcGFydGluZxIkCg5sYXRlcl9wbGF0ZV9ubxgQIA'
-    'EoCVIMbGF0ZXJQbGF0ZU5vEk8KEnB1bmN0dWFsaXR5X3N0YXR1cxgRIAEoDjIgLm15YnVzei5j'
-    'b21tb24uUHVuY3R1YWxpdHlTdGF0dXNSEXB1bmN0dWFsaXR5U3RhdHVz');
+    'EoCVIMbGF0ZXJQbGF0ZU5v');
 
 @$core.Deprecated('Use streamStopArrivalsRequestDescriptor instead')
 const StreamStopArrivalsRequest$json = {

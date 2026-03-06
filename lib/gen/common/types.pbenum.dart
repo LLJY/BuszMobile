@@ -37,37 +37,20 @@ class DelayStatus extends $pb.ProtobufEnum {
   static const DelayStatus DELAY_STATUS_ON_TIME = DelayStatus._(1, _omitEnumNames ? '' : 'DELAY_STATUS_ON_TIME');
   static const DelayStatus DELAY_STATUS_SLIGHT_DELAY = DelayStatus._(2, _omitEnumNames ? '' : 'DELAY_STATUS_SLIGHT_DELAY');
   static const DelayStatus DELAY_STATUS_HEAVY_DELAY = DelayStatus._(3, _omitEnumNames ? '' : 'DELAY_STATUS_HEAVY_DELAY');
+  static const DelayStatus DELAY_STATUS_EARLY = DelayStatus._(4, _omitEnumNames ? '' : 'DELAY_STATUS_EARLY');
 
   static const $core.List<DelayStatus> values = <DelayStatus> [
     DELAY_STATUS_UNSPECIFIED,
     DELAY_STATUS_ON_TIME,
     DELAY_STATUS_SLIGHT_DELAY,
     DELAY_STATUS_HEAVY_DELAY,
+    DELAY_STATUS_EARLY,
   ];
 
   static final $core.Map<$core.int, DelayStatus> _byValue = $pb.ProtobufEnum.initByValue(values);
   static DelayStatus? valueOf($core.int value) => _byValue[value];
 
   const DelayStatus._($core.int v, $core.String n) : super(v, n);
-}
-
-class PunctualityStatus extends $pb.ProtobufEnum {
-  static const PunctualityStatus PUNCTUALITY_STATUS_UNSPECIFIED = PunctualityStatus._(0, _omitEnumNames ? '' : 'PUNCTUALITY_STATUS_UNSPECIFIED');
-  static const PunctualityStatus PUNCTUALITY_STATUS_EARLY = PunctualityStatus._(1, _omitEnumNames ? '' : 'PUNCTUALITY_STATUS_EARLY');
-  static const PunctualityStatus PUNCTUALITY_STATUS_ON_TIME = PunctualityStatus._(2, _omitEnumNames ? '' : 'PUNCTUALITY_STATUS_ON_TIME');
-  static const PunctualityStatus PUNCTUALITY_STATUS_LATE = PunctualityStatus._(3, _omitEnumNames ? '' : 'PUNCTUALITY_STATUS_LATE');
-
-  static const $core.List<PunctualityStatus> values = <PunctualityStatus> [
-    PUNCTUALITY_STATUS_UNSPECIFIED,
-    PUNCTUALITY_STATUS_EARLY,
-    PUNCTUALITY_STATUS_ON_TIME,
-    PUNCTUALITY_STATUS_LATE,
-  ];
-
-  static final $core.Map<$core.int, PunctualityStatus> _byValue = $pb.ProtobufEnum.initByValue(values);
-  static PunctualityStatus? valueOf($core.int value) => _byValue[value];
-
-  const PunctualityStatus._($core.int v, $core.String n) : super(v, n);
 }
 
 class StalenessCategory extends $pb.ProtobufEnum {

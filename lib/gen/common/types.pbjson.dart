@@ -37,6 +37,7 @@ const DelayStatus$json = {
     {'1': 'DELAY_STATUS_ON_TIME', '2': 1},
     {'1': 'DELAY_STATUS_SLIGHT_DELAY', '2': 2},
     {'1': 'DELAY_STATUS_HEAVY_DELAY', '2': 3},
+    {'1': 'DELAY_STATUS_EARLY', '2': 4},
   ],
 };
 
@@ -44,24 +45,7 @@ const DelayStatus$json = {
 final $typed_data.Uint8List delayStatusDescriptor = $convert.base64Decode(
     'CgtEZWxheVN0YXR1cxIcChhERUxBWV9TVEFUVVNfVU5TUEVDSUZJRUQQABIYChRERUxBWV9TVE'
     'FUVVNfT05fVElNRRABEh0KGURFTEFZX1NUQVRVU19TTElHSFRfREVMQVkQAhIcChhERUxBWV9T'
-    'VEFUVVNfSEVBVllfREVMQVkQAw==');
-
-@$core.Deprecated('Use punctualityStatusDescriptor instead')
-const PunctualityStatus$json = {
-  '1': 'PunctualityStatus',
-  '2': [
-    {'1': 'PUNCTUALITY_STATUS_UNSPECIFIED', '2': 0},
-    {'1': 'PUNCTUALITY_STATUS_EARLY', '2': 1},
-    {'1': 'PUNCTUALITY_STATUS_ON_TIME', '2': 2},
-    {'1': 'PUNCTUALITY_STATUS_LATE', '2': 3},
-  ],
-};
-
-/// Descriptor for `PunctualityStatus`. Decode as a `google.protobuf.EnumDescriptorProto`.
-final $typed_data.Uint8List punctualityStatusDescriptor = $convert.base64Decode(
-    'ChFQdW5jdHVhbGl0eVN0YXR1cxIiCh5QVU5DVFVBTElUWV9TVEFUVVNfVU5TUEVDSUZJRUQQAB'
-    'IcChhQVU5DVFVBTElUWV9TVEFUVVNfRUFSTFkQARIeChpQVU5DVFVBTElUWV9TVEFUVVNfT05f'
-    'VElNRRACEhsKF1BVTkNUVUFMSVRZX1NUQVRVU19MQVRFEAM=');
+    'VEFUVVNfSEVBVllfREVMQVkQAxIWChJERUxBWV9TVEFUVVNfRUFSTFkQBA==');
 
 @$core.Deprecated('Use stalenessCategoryDescriptor instead')
 const StalenessCategory$json = {
