@@ -51,6 +51,25 @@ class DelayStatus extends $pb.ProtobufEnum {
   const DelayStatus._($core.int v, $core.String n) : super(v, n);
 }
 
+class PunctualityStatus extends $pb.ProtobufEnum {
+  static const PunctualityStatus PUNCTUALITY_STATUS_UNSPECIFIED = PunctualityStatus._(0, _omitEnumNames ? '' : 'PUNCTUALITY_STATUS_UNSPECIFIED');
+  static const PunctualityStatus PUNCTUALITY_STATUS_EARLY = PunctualityStatus._(1, _omitEnumNames ? '' : 'PUNCTUALITY_STATUS_EARLY');
+  static const PunctualityStatus PUNCTUALITY_STATUS_ON_TIME = PunctualityStatus._(2, _omitEnumNames ? '' : 'PUNCTUALITY_STATUS_ON_TIME');
+  static const PunctualityStatus PUNCTUALITY_STATUS_LATE = PunctualityStatus._(3, _omitEnumNames ? '' : 'PUNCTUALITY_STATUS_LATE');
+
+  static const $core.List<PunctualityStatus> values = <PunctualityStatus> [
+    PUNCTUALITY_STATUS_UNSPECIFIED,
+    PUNCTUALITY_STATUS_EARLY,
+    PUNCTUALITY_STATUS_ON_TIME,
+    PUNCTUALITY_STATUS_LATE,
+  ];
+
+  static final $core.Map<$core.int, PunctualityStatus> _byValue = $pb.ProtobufEnum.initByValue(values);
+  static PunctualityStatus? valueOf($core.int value) => _byValue[value];
+
+  const PunctualityStatus._($core.int v, $core.String n) : super(v, n);
+}
+
 class StalenessCategory extends $pb.ProtobufEnum {
   static const StalenessCategory STALENESS_UNSPECIFIED = StalenessCategory._(0, _omitEnumNames ? '' : 'STALENESS_UNSPECIFIED');
   static const StalenessCategory STALENESS_LIVE = StalenessCategory._(1, _omitEnumNames ? '' : 'STALENESS_LIVE');
